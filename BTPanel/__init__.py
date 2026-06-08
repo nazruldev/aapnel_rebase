@@ -405,6 +405,11 @@ def request_check():
     if request.method not in ['GET', 'POST', 'HEAD']: return abort(404)
     if public.is_removed_panel_path(request.path):
         return abort(404)
+    if public.is_offline_mode():
+        public.ensure_offline_isolation_state()
+    classic_redirect = public.redirect_v2_classic_to_fresh()
+    if classic_redirect is not None:
+        return classic_redirect
     g.request_time = time.time()
     g.return_message = False
 
@@ -1778,6 +1783,8 @@ def panel_wxapp(pdata=None):
 
 @app.route('/auth', methods=method_all)
 def auth(pdata=None):
+    if public.is_offline_mode():
+        return public.offline_cloud_blocked_message()
     # 面板认证接口
     comReturn = comm.local()
     if comReturn: return comReturn
@@ -5355,6 +5362,8 @@ def panel_wxapp_v2(pdata=None):
 
 @app.route(route_v2 + '/auth', methods=method_all)
 def auth_v2(pdata=None):
+    if public.is_offline_mode():
+        return public.offline_cloud_blocked_message()
     # 面板认证接口
     comReturn = comm.local()
     if comReturn: return comReturn
@@ -6905,6 +6914,8 @@ def check_auth_v2(pdata=None):
 
 @app.route('/bind', methods=method_get)
 def bind():
+    if public.is_offline_mode():
+        return redirect('/', 302)
     comReturn = comm.local()
     if comReturn: return comReturn
     if public.is_bind(): return redirect('/', 302)

@@ -1080,6 +1080,22 @@ echo "=====================================" """
 
     # 更新面板
     def UpdatePanel(self,get):
+        if public.is_offline_mode():
+            from flask import session
+            ver = session.get('version', public.version())
+            if hasattr(get, 'toUpdate'):
+                return public.return_message(-1, 0, public.lang("Offline mode: panel update is disabled. Use git pull on your fork."))
+            update_info = {
+                'version': ver,
+                'local_is_latest': True,
+                'force': False,
+                'is_beta': 0,
+                'is_pro': 0,
+                'ignore': [],
+                'beta': {'version': ver},
+                'pro': {'version': ver},
+            }
+            return public.return_message(0, 0, update_info)
         if 'check' in get:
             # 校验参数
             try:

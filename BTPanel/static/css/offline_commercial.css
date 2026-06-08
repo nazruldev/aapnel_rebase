@@ -1,4 +1,4 @@
-/* Hide aaPanel commercial / upgrade UI in offline mode */
+/* Hide aaPanel commercial / cloud UI in offline isolated mode */
 body.panel-offline-mode .pro-badge,
 body.panel-offline-mode #updata_pro_info,
 body.panel-offline-mode .product-buy,
@@ -15,8 +15,20 @@ body.panel-offline-mode .btltd,
 body.panel-offline-mode .updata_pro,
 body.panel-offline-mode .showprofun,
 body.panel-offline-mode .alert-ltd-success,
-body.panel-offline-mode .thumbnail-title-button-new.daily-product-buy {
+body.panel-offline-mode .thumbnail-title-button-new.daily-product-buy,
+body.panel-offline-mode a[href*='aapanel.com'],
+body.panel-offline-mode a[href*='bt.cn'] {
 	display: none !important;
 	visibility: hidden !important;
 	pointer-events: none !important;
+}
+
+/* Account / update / license banners on Settings & Account pages */
+body.panel-offline-mode [class*='accountIntegration'],
+body.panel-offline-mode [class*='update-panel'],
+body.panel-offline-mode [class*='bind-account'],
+body.panel-offline-mode .panel-update-banner,
+body.panel-offline-mode .license-modal,
+body.panel-offline-mode .pay-modal {
+	display: none !important;
 }

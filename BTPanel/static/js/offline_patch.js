@@ -38,6 +38,17 @@
 			}
 		}
 
+		if (typeof index !== 'undefined') {
+			index.check_update = noop;
+			index.to_update = noop;
+		}
+		if (bt.system) {
+			bt.system.check_update = function (cb) {
+				if (cb) cb({ status: true, local_is_latest: true, version: window.panelVersion || '' });
+			};
+			bt.system.to_update = noop;
+		}
+
 		if (typeof product_recommend !== 'undefined') {
 			product_recommend.pay_product_sign = noop;
 			if (product_recommend.recommend_product_view) {
@@ -47,7 +58,7 @@
 	}
 
 	var UPGRADE_RE =
-		/upgrade\s*now|renew\s*now|buy\s*now|upgrade\s*to\s*pro|bind\s*account|立即升级|立即续费|升级专业版/i;
+		/upgrade\s*now|renew\s*now|renewal|buy\s*now|buy\s*license|upgrade\s*to\s*pro|bind\s*account|license|purchase|aapanel\.com|立即升级|立即续费|升级专业版/i;
 
 	function stripCommercialUi() {
 		if (typeof $ === 'undefined') return;

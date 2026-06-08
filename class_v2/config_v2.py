@@ -1244,6 +1244,11 @@ class config:
 
     # 设置自动更新
     def AutoUpdatePanel(self, get):
+        if public.is_offline_mode():
+            filename = 'data/autoUpdate.pl'
+            if os.path.exists(filename):
+                os.remove(filename)
+            return public.return_message(0, 0, public.lang("Offline mode: auto update is disabled"))
         filename = 'data/autoUpdate.pl'
         if os.path.exists(filename):
             os.remove(filename)
@@ -4084,6 +4089,10 @@ class config:
     def get_panel_theme(self, get=None):
         try:
             res =  self.themeManager.get_config()
+            if public.is_offline_mode() and res.get('status') and isinstance(res.get('data'), dict):
+                theme = res['data'].setdefault('theme', {})
+                if isinstance(theme, dict):
+                    theme['view'] = 'default'
             return return_message(0 if res.get("status") else -1, 0, res.get("data") or res.get("msg", ""))
         except Exception as e:
             return public.fail_v2("get panel theme config failed: {}".format(str(e)))

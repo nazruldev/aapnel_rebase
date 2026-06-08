@@ -593,6 +593,8 @@ class panelPlugin:
 
     #同步安装
     def install_sync(self,pluginInfo,get):
+        if public.is_offline_mode() and pluginInfo.get('versions') and 'download' in pluginInfo['versions'][0]:
+            return public.return_msg_gettext(False, public.lang("Offline mode: import plugins via ZIP in App Store"))
         import panelAuth
         try:
             token = panelAuth.panelAuth().create_serverid(None)['token']
@@ -2668,6 +2670,9 @@ class panelPlugin:
 
     #从云端获取插件列表
     def getCloudPlugin(self,get):
+        if public.is_offline_mode():
+            session['getCloudPlugin'] = True
+            return public.return_message(0, 0, public.lang("Using local plugin list (offline mode)"))
         if session.get('getCloudPlugin') and get != None: return public.return_message(0, 0,'Your plugin list is already the latest version {}!',("-1",))
         import json
         if not session.get('download_url'): session['download_url'] = 'http://node.aapanel.com'

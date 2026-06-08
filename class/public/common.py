@@ -9277,8 +9277,12 @@ def apply_offline_soft_list(plugin_list_data):
         if not isinstance(items, list):
             continue
         for item in items:
-            if isinstance(item, dict) and item.get('endtime', -1) < 0:
-                item['endtime'] = 0
+            if isinstance(item, dict):
+                if item.get('endtime', -1) < 0:
+                    item['endtime'] = 0
+                item['pid'] = 0
+                if 'price' in item:
+                    item['price'] = '0'
     return plugin_list_data
 
 
@@ -9286,6 +9290,7 @@ REMOVED_MENU_IDS = frozenset([
     'memuAwptoolkit',
     'memu_btwaf',
     'memuDomains',
+    'memuAccount',
 ])
 
 REMOVED_PANEL_PATH_PREFIXES = (
@@ -9293,17 +9298,35 @@ REMOVED_PANEL_PATH_PREFIXES = (
     '/waf',
     '/btwaf',
     '/ssl_domain',
+    '/whm',
+    '/bind',
 )
 
 REMOVED_PANEL_API_PREFIXES = (
     '/v2/ssl_domain',
     '/v2/business_ssl',
     '/v2/wp/',
+    '/v2/auth',
+    '/auth',
 )
 
 REMOVED_PANEL_EXACT_PATHS = frozenset([
     '/btwaf_error',
     '/v2/btwaf_error',
+])
+
+# Classic (/v2/*) HTML pages → redirect to Fresh UI (/)
+CLASSIC_UI_PAGE_SEGMENTS = frozenset([
+    'site', 'ftp', 'database', 'control', 'logs', 'firewall', 'crontab',
+    'docker', 'mail', 'soft', 'config', 'xterm', 'whm', 'node', 'files',
+    'password', 'warning', 'monitor', 'site_monitor', 'modify_password',
+    'ssh_security', 'san', 'safecloud', 'git',
+])
+
+V2_API_SEGMENTS = frozenset([
+    'plugin', 'ajax', 'auth', 'mod', 'data', 'ssl', 'acme', 'api', 'download',
+    'panel', 'project', 'webhook', 'task', 'deployment', 'safe', 'btwaf',
+    'wxapp', 'mail_sys', 'bind', 'pyenv_webssh', 'ws_model', 'ws_modsoc',
 ])
 
 
@@ -9327,9 +9350,61 @@ def is_removed_panel_path(path):
         if path == prefix or path.startswith(prefix + '/'):
             return True
     for prefix in REMOVED_PANEL_API_PREFIXES:
-        if path == prefix or path.startswith(prefix):
+        if path == prefix or path.startswith(prefix + '/'):
             return True
     return False
+
+
+def offline_cloud_blocked_message():
+    return return_message(-1, 0, 'Offline mode: cloud aaPanel services are disabled. Use git pull to update the panel and import plugins via ZIP.')
+
+
+def redirect_v2_classic_to_fresh():
+    """Force Fresh (Vite) UI: redirect legacy /v2/* HTML routes to /path."""
+    if not is_offline_mode():
+        return None
+    from flask import redirect, request
+    if request.method != 'GET':
+        return None
+    path = request.path.split('?')[0]
+    if path in ('/v2', '/v2/'):
+        return redirect('/', 302)
+    if not path.startswith('/v2/'):
+        return None
+    rest = path[4:]
+    if not rest:
+        return redirect('/', 302)
+    first = rest.split('/')[0]
+    if first in V2_API_SEGMENTS:
+        return None
+    if first in CLASSIC_UI_PAGE_SEGMENTS:
+        query = ('?' + request.query_string.decode()) if request.query_string else ''
+        return redirect('/' + rest + query, 302)
+    return None
+
+
+def ensure_offline_isolation_state():
+    """Disable auto-update and cloud bind flags on disk when offline."""
+    if not is_offline_mode():
+        return
+    panel_path = get_panel_path()
+    for rel in ('data/autoUpdate.pl', 'data/recover_panel.pl'):
+        fpath = panel_path + '/' + rel
+        if os.path.exists(fpath):
+            try:
+                os.remove(fpath)
+            except:
+                pass
+    theme_file = panel_path + '/data/panel_asset.json'
+    try:
+        if os.path.exists(theme_file):
+            theme_data = json.loads(readFile(theme_file))
+            if isinstance(theme_data, dict) and isinstance(theme_data.get('theme'), dict):
+                if theme_data['theme'].get('view') not in (None, 'default'):
+                    theme_data['theme']['view'] = 'default'
+                    writeFile(theme_file, json.dumps(theme_data, ensure_ascii=False, indent=2))
+    except:
+        pass
 
 
 def is_offline_mode():
@@ -9362,6 +9437,14 @@ def apply_offline_public_config(result):
     payload['ltd'] = 0
     payload['account_limit'] = False
     payload['install_finished'] = True
+    payload['force_bind'] = False
+    payload['is_bind'] = True
+    payload['bind_status'] = True
+    payload['autoUpdate'] = False
+    payload['hasNewVersion'] = False
+    payload['local_is_latest'] = True
+    payload['show_update'] = False
+    payload['offline_mode'] = True
 
     user_info = payload.get('user_info')
     if not isinstance(user_info, dict):
