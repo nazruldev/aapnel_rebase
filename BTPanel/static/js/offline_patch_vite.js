@@ -5,6 +5,13 @@
 (function () {
 	if (!window.__PANEL_OFFLINE_MODE) return;
 
+	(function removeStaleZipBtn() {
+		var btn = document.getElementById('offline-plugin-zip-btn');
+		if (btn) btn.remove();
+		var input = document.getElementById('offline-plugin-zip-input');
+		if (input) input.remove();
+	})();
+
 	document.body && document.body.classList.add('panel-offline-mode');
 
 	var COMMERCIAL_RE =
@@ -164,10 +171,20 @@
 	}
 
 	function removeLegacyZipBtn() {
-		var btn = document.getElementById('offline-plugin-zip-btn');
-		if (btn) btn.remove();
-		var input = document.getElementById('offline-plugin-zip-input');
-		if (input) input.remove();
+		var ids = ['offline-plugin-zip-btn', 'offline-plugin-zip-input'];
+		ids.forEach(function (id) {
+			var el = document.getElementById(id);
+			if (el) el.remove();
+		});
+		document.querySelectorAll('button, .n-button, a.n-button').forEach(function (el) {
+			if (el.id === 'offline-plugin-zip-btn') {
+				el.remove();
+				return;
+			}
+			if (el.closest && el.closest('.appStore-third-tips')) return;
+			var label = (el.textContent || '').replace(/\s+/g, ' ').trim();
+			if (label === 'Import Plugin (ZIP)') el.remove();
+		});
 	}
 
 	function hideAppStoreEmptyFeedback() {
@@ -474,7 +491,21 @@
 	refreshBuiltinPlugins();
 
 	if (document.documentElement) {
-		new MutationObserver(function () {
+		new MutationObserver(function (mutations) {
+			for (var i = 0; i < mutations.length; i++) {
+				var nodes = mutations[i].addedNodes;
+				for (var j = 0; j < nodes.length; j++) {
+					var node = nodes[j];
+					if (!node || node.nodeType !== 1) continue;
+					if (node.id === 'offline-plugin-zip-btn' || node.id === 'offline-plugin-zip-input') {
+						node.remove();
+						continue;
+					}
+					if (node.querySelector && node.querySelector('#offline-plugin-zip-btn')) {
+						removeLegacyZipBtn();
+					}
+				}
+			}
 			scheduleStripCommercialUi();
 		}).observe(document.documentElement, {
 			childList: true,

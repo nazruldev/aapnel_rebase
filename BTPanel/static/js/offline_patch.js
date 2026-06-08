@@ -10,6 +10,12 @@
 	function stripClassicFeedback() {
 		if (typeof $ === 'undefined') return;
 		$('#offline-plugin-zip-btn, #offline-plugin-zip-input').remove();
+		$('button, .n-button, .btn').each(function () {
+			if ($(this).closest('.appStore-third-tips').length) return;
+			if (($(this).text() || '').replace(/\s+/g, ' ').trim() === 'Import Plugin (ZIP)') {
+				$(this).remove();
+			}
+		});
 		$('.feedback-btn, .toolbar-right .feedback, .icon-demand').remove();
 		$('.n-data-table-empty a, .n-data-table-empty .n-button').each(function () {
 			if (/feedback|demand feedback/i.test($(this).text())) $(this).remove();

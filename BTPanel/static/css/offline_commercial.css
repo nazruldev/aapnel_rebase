@@ -54,8 +54,17 @@ body.panel-offline-mode .appStore-third-tips .n-upload {
 }
 
 body.panel-offline-mode #offline-plugin-zip-btn,
-body.panel-offline-mode #offline-plugin-zip-input {
+body.panel-offline-mode #offline-plugin-zip-input,
+body.panel-offline-mode button#import-plugin-zip-fork {
 	display: none !important;
+	visibility: hidden !important;
+	pointer-events: none !important;
+	opacity: 0 !important;
+	height: 0 !important;
+	width: 0 !important;
+	overflow: hidden !important;
+	position: absolute !important;
+	left: -9999px !important;
 }
 
 body.panel-offline-mode .n-data-table-empty a,
