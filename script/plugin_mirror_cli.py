@@ -174,6 +174,22 @@ def cmd_export(path=None):
     print('Copy to offline server, then: bt plugin import {}'.format(path))
 
 
+def cmd_add_local(name, zip_path):
+    _bar()
+    print('Add local plugin:', name, zip_path)
+    _bar()
+    result = mirror.add_local_plugin(name, zip_path)
+    if isinstance(result, dict):
+        msg = result.get('message', result)
+        if isinstance(msg, dict):
+            print('OK — cached at', msg.get('zip'))
+        else:
+            print(msg)
+    else:
+        print(result)
+    return True
+
+
 def cmd_import(path):
     path = os.path.abspath(path)
     if not os.path.isfile(path):
@@ -207,10 +223,11 @@ def show_menu():
         print('  (5) Install ALL plugins from local cache')
         print('  (6) Export pack (.tgz) for other servers')
         print('  (7) Import pack (.tgz) from another server')
+        print('  (8) Add local ZIP (no aaPanel login) e.g. bt_agent')
         print('  (0) Back')
         _bar()
         try:
-            choice = raw_input('Select option [0-7]: ').strip()
+            choice = raw_input('Select option [0-8]: ').strip()
         except (EOFError, KeyboardInterrupt):
             print('')
             return
@@ -244,6 +261,12 @@ def show_menu():
             if src:
                 cmd_import(src)
             _pause()
+        elif choice == '8':
+            name = raw_input('Plugin name (e.g. bt_agent): ').strip()
+            zpath = raw_input('Path to .zip file: ').strip()
+            if name and zpath:
+                cmd_add_local(name, zpath)
+            _pause()
         else:
             print('Invalid option')
             _pause()
@@ -253,7 +276,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='Plugin mirror CLI')
     parser.add_argument('command', nargs='?', default='menu',
                         choices=['menu', 'list', 'sync-all', 'sync', 'install',
-                                 'install-all', 'export', 'import'])
+                                 'install-all', 'export', 'import', 'add-local'])
     parser.add_argument('arg', nargs='?', default='')
     parser.add_argument('--refresh', action='store_true')
     args = parser.parse_args(argv)
@@ -288,6 +311,13 @@ def main(argv=None):
             print('Usage: bt plugin import /path/to/pack.tgz')
             return 1
         return 0 if cmd_import(args.arg.strip()) else 1
+    if args.command == 'add-local':
+        parts = (args.arg or '').split(',', 1)
+        if len(parts) < 2 or not parts[0].strip() or not parts[1].strip():
+            print('Usage: bt plugin add-local bt_agent,/path/to/bt_agent.zip')
+            return 1
+        cmd_add_local(parts[0].strip(), parts[1].strip())
+        return 0
     return 1
 
 

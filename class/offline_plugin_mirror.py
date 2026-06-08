@@ -73,6 +73,75 @@ def get_mirror_zip(name):
     return None
 
 
+def bundled_plugin_dir():
+    path = '{}/data/bundled_plugins'.format(public.get_panel_path())
+    if not os.path.exists(path):
+        os.makedirs(path, mode=0o755)
+    return path
+
+
+def bundled_zip_path(name):
+    if not name:
+        return None
+    path = '{}/{}.zip'.format(bundled_plugin_dir(), name)
+    if os.path.isfile(path) and os.path.getsize(path) > 100:
+        return path
+    return None
+
+
+def _local_plugin_hint(name):
+    return (
+        'No aaPanel login required: put {name}.zip in {dir}/ '
+        'or run: bt plugin add-local {name} /path/to/{name}.zip '
+        'or: bt plugin import /path/pack.tgz'
+    ).format(name=name, dir=bundled_plugin_dir())
+
+
+def register_local_zip(name, zip_path, title=None, version=''):
+    """Register a local plugin ZIP into mirror cache (no cloud account)."""
+    if not name:
+        raise public.PanelError('Plugin name required')
+    zip_path = os.path.abspath(zip_path)
+    if not os.path.isfile(zip_path):
+        raise public.PanelError('ZIP not found: {}'.format(zip_path))
+    if os.path.getsize(zip_path) < 100:
+        raise public.PanelError('ZIP file too small')
+
+    import shutil
+    zip_dir = mirror_zip_dir()
+    dest = '{}/{}.zip'.format(zip_dir, name)
+    shutil.copyfile(zip_path, dest)
+
+    bundled_dest = '{}/{}.zip'.format(bundled_plugin_dir(), name)
+    if os.path.abspath(zip_path) != os.path.abspath(bundled_dest):
+        shutil.copyfile(zip_path, bundled_dest)
+
+    manifest = load_manifest()
+    manifest.setdefault('plugins', {})[name] = {
+        'title': title or name,
+        'version': version or '',
+        'zip': dest,
+        'size': os.path.getsize(dest),
+        'synced_at': int(time.time()),
+        'enabled': True,
+        'source': 'local',
+    }
+    save_manifest(manifest)
+    return dest
+
+
+def add_local_plugin(name, zip_path):
+    zip_path = os.path.abspath(zip_path)
+    title = name
+    try:
+        import builtin_plugins as bp
+        title = bp.PLUGINS.get(name, {}).get('title', name)
+    except Exception:
+        pass
+    dest = register_local_zip(name, zip_path, title=title)
+    return public.return_message(0, 0, {'name': name, 'zip': dest, 'msg': 'Added to local mirror'})
+
+
 def is_mirror_plugin(item):
     if not isinstance(item, dict):
         return False
@@ -209,35 +278,28 @@ def _get_cloud_auth_pdata():
     return _load_panel_userinfo(require_token=True)
 
 
-def _parse_download_http_error(resp):
-    try:
-        body = resp.json()
-        if isinstance(body, dict):
-            for key in ('msg', 'message', 'res', 'error'):
-                if body.get(key):
-                    return str(body[key])
-    except:
-        pass
-    text = (resp.text or '').strip()
-    if text:
-        return text[:400]
-    return 'Download failed (HTTP {})'.format(resp.status_code)
-
-
-def _download_plugin_from_cloud(name, version):
-    """Download plugin ZIP via aaPanel download_plugin API."""
+def _build_download_pdata(name, version, with_auth=False):
     import json
-    import requests
+    if with_auth:
+        try:
+            pdata = _load_panel_userinfo(require_token=True)
+        except public.PanelError:
+            return None
+    else:
+        pdata = {}
+        try:
+            pdata = dict(_load_panel_userinfo(require_token=False) or {})
+        except Exception:
+            pdata = {}
+        if not pdata.get('server_id'):
+            try:
+                pdata['server_id'] = public.gen_server_id()
+            except Exception:
+                try:
+                    pdata['server_id'] = public.get_server_id()
+                except Exception:
+                    pdata['server_id'] = public.md5(public.get_mac_address())
 
-    panel_path = public.get_panel_path()
-    tmp_path = '{}/temp'.format(panel_path)
-    if not os.path.exists(tmp_path):
-        os.makedirs(tmp_path, mode=0o755)
-    filename = '{}/{}.zip'.format(tmp_path, name)
-    if os.path.isfile(filename):
-        os.remove(filename)
-
-    pdata = _get_cloud_auth_pdata()
     extra = public.get_user_info() or {}
     if isinstance(extra, dict):
         for key, val in extra.items():
@@ -247,18 +309,50 @@ def _download_plugin_from_cloud(name, version):
     pdata['version'] = version
     pdata['os'] = 'Linux'
     pdata['environment_info'] = json.dumps(public.fetch_env_info(), ensure_ascii=False)
+    return pdata
+
+
+def _save_stream_response_to_file(resp, filename):
+    with open(filename, 'wb') as out:
+        for chunk in resp.iter_content(chunk_size=256 * 1024):
+            if chunk:
+                out.write(chunk)
+    content_md5 = resp.headers.get('Content-md5')
+    if content_md5 and public.FileMd5(filename) != content_md5:
+        os.remove(filename)
+        raise public.PanelError('Verify package checksum failed.')
+    if not os.path.isfile(filename) or os.path.getsize(filename) < 100:
+        if os.path.isfile(filename):
+            os.remove(filename)
+        raise public.PanelError('Empty package file')
+    return filename
+
+
+def _try_cloud_download(name, version, with_auth=False):
+    import requests
+    pdata = _build_download_pdata(name, version, with_auth=with_auth)
+    if pdata is None:
+        return None, None
+
+    panel_path = public.get_panel_path()
+    tmp_path = '{}/temp'.format(panel_path)
+    if not os.path.exists(tmp_path):
+        os.makedirs(tmp_path, mode=0o755)
+    filename = '{}/{}.zip'.format(tmp_path, name)
+    if os.path.isfile(filename):
+        os.remove(filename)
 
     try:
         headers = dict(public.get_requests_headers())
-    except:
+    except Exception:
         headers = {'Content-type': 'application/x-www-form-urlencoded', 'User-Agent': 'BT-Panel'}
-    headers['authorization'] = 'bt {}'.format(pdata['token'])
+    if with_auth and pdata.get('token'):
+        headers['authorization'] = 'bt {}'.format(pdata['token'])
 
     urls = [
         '{}/api/panel/download_plugin'.format(public.sync_plugin_OfficialApiBase()),
         '{}/api/panel/download_plugin'.format(public.OfficialApiBase()),
     ]
-
     last_err = None
     for url in urls:
         try:
@@ -266,42 +360,53 @@ def _download_plugin_from_cloud(name, version):
         except Exception as ex:
             last_err = public.PanelError(str(ex))
             continue
-
         if not resp.ok:
             last_err = public.PanelError(_parse_download_http_error(resp))
             continue
-
         try:
             headers_total_size = int(resp.headers.get('File-size', 0))
-        except:
+        except Exception:
             headers_total_size = 0
-
         if headers_total_size <= 0:
             last_err = public.PanelError(_parse_download_http_error(resp))
             continue
+        try:
+            return _save_stream_response_to_file(resp, filename), None
+        except public.PanelError as ex:
+            last_err = ex
+    return None, last_err
 
-        with open(filename, 'wb') as out:
-            for chunk in resp.iter_content(chunk_size=256 * 1024):
-                if chunk:
-                    out.write(chunk)
 
-        content_md5 = resp.headers.get('Content-md5')
-        if content_md5 and public.FileMd5(filename) != content_md5:
-            os.remove(filename)
-            last_err = public.PanelError('Verify package checksum failed.')
-            continue
+def _parse_download_http_error(resp):
+    try:
+        body = resp.json()
+        if isinstance(body, dict):
+            for key in ('msg', 'message', 'res', 'error'):
+                if body.get(key):
+                    return str(body[key])
+    except Exception:
+        pass
+    text = (resp.text or '').strip()
+    if text:
+        return text[:400]
+    return 'Download failed (HTTP {})'.format(resp.status_code)
 
-        if not os.path.isfile(filename) or os.path.getsize(filename) < 100:
-            if os.path.isfile(filename):
-                os.remove(filename)
-            last_err = public.PanelError('Empty package for {}'.format(name))
-            continue
 
-        return filename
-
+def _download_plugin_from_cloud(name, version):
+    """Download plugin ZIP via aaPanel API — anonymous first, then account if bound."""
+    src, err = _try_cloud_download(name, version, with_auth=False)
+    if src:
+        return src
+    src, err2 = _try_cloud_download(name, version, with_auth=True)
+    if src:
+        return src
+    last_err = err2 or err
     if last_err:
+        err_text = str(last_err).lower()
+        if any(x in err_text for x in ('login', 'token', 'account', 'bound', '401', '403', '400')):
+            raise public.PanelError(_local_plugin_hint(name))
         raise last_err
-    raise public.PanelError('Download failed for {}'.format(name))
+    raise public.PanelError(_local_plugin_hint(name))
 
 
 def list_catalog(refresh=False):
@@ -324,7 +429,7 @@ def list_catalog(refresh=False):
         name = item.get('name')
         if not name:
             continue
-        mirrored = has_mirror(name)
+        mirrored = has_mirror(name) or bool(bundled_zip_path(name))
         catalog.append({
             'name': name,
             'title': item.get('title', name),
@@ -349,13 +454,30 @@ def _download_plugin_zip(item):
     zip_dir = mirror_zip_dir()
     dest = '{}/{}.zip'.format(zip_dir, name)
     tmp = '{}/{}.download'.format(zip_dir, name)
+    import shutil
 
-    if 'download' in v0 and v0.get('download'):
-        auth = _get_cloud_auth_pdata()
-        token = auth.get('token') or ''
-        url = '{}/api/plugin/download?filename={}&token={}'.format(
-            public.OfficialApiBase(), v0['download'], token)
-        public.downloadFile(url, tmp)
+    bundled = bundled_zip_path(name)
+    if bundled:
+        shutil.copyfile(bundled, tmp)
+    elif 'download' in v0 and v0.get('download'):
+        downloaded = False
+        token_opts = ['']
+        try:
+            auth = _load_panel_userinfo(require_token=False)
+            if isinstance(auth, dict) and auth.get('token'):
+                token_opts.append(auth['token'])
+        except Exception:
+            pass
+        for token in token_opts:
+            url = '{}/api/plugin/download?filename={}&token={}'.format(
+                public.OfficialApiBase(), v0['download'], token)
+            public.downloadFile(url, tmp)
+            if os.path.isfile(tmp) and os.path.getsize(tmp) > 100:
+                downloaded = True
+                break
+            public.ExecShell('rm -f {}'.format(tmp))
+        if not downloaded:
+            raise public.PanelError(_local_plugin_hint(name))
         if v0.get('md5') and os.path.exists(tmp):
             if public.FileMd5(tmp) != v0['md5']:
                 public.ExecShell('rm -f {}'.format(tmp))
@@ -369,12 +491,8 @@ def _download_plugin_zip(item):
                 break
             except public.PanelError as ex:
                 last_ex = ex
-                err = str(ex).lower()
-                if 'login' in err or 'token' in err or 'account' in err:
-                    raise
         if not src:
-            raise last_ex or public.PanelError('Download failed for {}'.format(name))
-        import shutil
+            raise last_ex or public.PanelError(_local_plugin_hint(name))
         shutil.copyfile(src, tmp)
 
     if not os.path.isfile(tmp) or os.path.getsize(tmp) < 100:
@@ -412,6 +530,21 @@ def sync_plugins(names=None, sync_all_free=False):
         if not is_mirror_plugin(item):
             results.append({'name': name, 'status': False, 'msg': 'Paid or not mirrorable'})
             continue
+        bundled = bundled_zip_path(name)
+        if bundled:
+            try:
+                zip_path = register_local_zip(
+                    name, bundled,
+                    title=item.get('title', name),
+                    version=_plugin_version_key(item))
+                manifest = load_manifest()
+                results.append({
+                    'name': name, 'status': True,
+                    'msg': 'From bundled_plugins (no cloud login)', 'zip': zip_path})
+                continue
+            except Exception as ex:
+                results.append({'name': name, 'status': False, 'msg': str(ex)})
+                continue
         try:
             zip_path = _download_plugin_zip(item)
             manifest.setdefault('plugins', {})[name] = {
