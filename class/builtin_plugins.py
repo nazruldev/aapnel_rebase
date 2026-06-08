@@ -61,7 +61,9 @@ def is_installed(name):
     if name not in PLUGINS:
         return False
     checks = PLUGINS[name].get('install_checks') or ''
-    return bool(checks and os.path.exists(checks))
+    if not checks or not os.path.isdir(checks):
+        return False
+    return os.path.exists(checks + '/info.json') and os.path.exists(checks + '/install.sh')
 
 
 def is_ui_enabled(name):

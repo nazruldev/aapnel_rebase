@@ -947,6 +947,9 @@ def index_new(sub_path: str = ''):
     data['offline_mode'] = public.is_offline_mode()
     try:
         import builtin_plugins as bp
+        for name in bp.PLUGINS:
+            if bp.is_installed(name):
+                bp.ensure_list_entry(name)
         data['builtin_plugins'] = bp.get_public_status()
     except:
         data['builtin_plugins'] = {}

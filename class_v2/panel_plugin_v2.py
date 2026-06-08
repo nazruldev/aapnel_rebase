@@ -585,12 +585,81 @@ class panelPlugin:
         except:
             pass
 
-        return self._normalize_install_result(result)
+        normalized = self._normalize_install_result(result)
+        if pluginInfo['type'] != 5:
+            try:
+                if isinstance(normalized, dict) and int(normalized.get('status', -1)) == 0:
+                    self._post_plugin_install(pluginInfo.get('name'))
+            except:
+                pass
+        return normalized
+
+    def _post_plugin_install(self, plugin_name):
+        if not plugin_name:
+            return
+        plugin_path = '{}/{}'.format(self.__plugin_path, plugin_name)
+        if not os.path.isdir(plugin_path):
+            return
+        self._sync_plugin_sidebar(plugin_name)
+        reload_file = os.path.join(self.__panel_path, 'data/{}.pl'.format(plugin_name))
+        public.writeFile(reload_file, '')
+        try:
+            import builtin_plugins as bp
+            if plugin_name in bp.PLUGINS:
+                bp.ensure_list_entry(plugin_name)
+                bp.set_ui_enabled(plugin_name, True)
+        except:
+            pass
+
+    def _sync_plugin_sidebar(self, plugin_name):
+        info_file = '{}/{}/info.json'.format(self.__plugin_path, plugin_name)
+        if not os.path.exists(info_file):
+            return
+        try:
+            info = json.loads(public.readFile(info_file))
+        except:
+            return
+        list_path = self.__panel_path + '/data/list.json'
+        items = []
+        if os.path.exists(list_path):
+            try:
+                items = json.loads(public.readFile(list_path))
+                if not isinstance(items, list):
+                    items = []
+            except:
+                items = []
+        updated = False
+        for item in items:
+            if isinstance(item, dict) and item.get('name') == plugin_name:
+                item['display'] = 1
+                for key in ('shell', 'title', 'ps', 'sort', 'tip', 'home', 'author', 'type', 'id'):
+                    if info.get(key) not in (None, ''):
+                        item[key] = info[key]
+                updated = True
+                break
+        if not updated:
+            items.append({
+                'sort': int(info.get('sort', 99)),
+                'ps': info.get('ps', info.get('title', plugin_name)),
+                'shell': info.get('shell', plugin_name + '.sh'),
+                'name': plugin_name,
+                'title': info.get('title', plugin_name),
+                'default': bool(info.get('default', False)),
+                'display': 1,
+                'author': info.get('author', 'aaPanel'),
+                'home': info.get('home', 'https://www.aapanel.com'),
+                'type': info.get('type', 'other'),
+                'pid': info.get('id', info.get('pid', 9000)),
+                'id': info.get('id', 3),
+            })
+        public.writeFile(list_path, json.dumps(items, ensure_ascii=False))
 
     def _normalize_install_result(self, result):
         """Map return_msg_gettext / return_message install results to API response."""
         if not isinstance(result, dict):
             return public.return_message(0, 0, result)
+        if result.get('tmp_path') and result.get('name') and 'status' not in result:
+            return public.return_message(-1, 0, public.lang('Plugin package extracted but not installed. Please try again.'))
         if 'status' not in result:
             return public.return_message(0, 0, result)
         st = result.get('status')
@@ -629,7 +698,15 @@ class panelPlugin:
                 return public.return_msg_gettext(False, public.lang("File hash verification failed, stop installation!"))
             update = False
             if os.path.exists(pluginInfo['install_checks']): update =pluginInfo['versions'][0]['version_msg']
-            return self._update_zip(None,toFile,update)
+            unpack = self._update_zip(None, toFile, update)
+            if isinstance(unpack, dict) and unpack.get('status') is False:
+                return unpack
+            if not isinstance(unpack, dict) or not unpack.get('tmp_path'):
+                return public.return_msg_gettext(False, public.lang('Invalid plugin package'))
+            zip_get = public.dict_obj()
+            zip_get.plugin_name = unpack.get('name', pluginInfo['name'])
+            zip_get.tmp_path = unpack['tmp_path']
+            return self.input_zip(zip_get)
         else:
             # download_url = public.get_url() + '/install/plugin/' + pluginInfo['name'] + '_en/install.sh'
             # toFile = '/tmp/%s.sh' % pluginInfo['name']
@@ -3096,6 +3173,7 @@ class panelPlugin:
                 shutil.copyfile(icon_sfile,icon_dfile)
             #----- 增加图标复制 END -----#
             public.write_log_gettext('Software manager','Installed third-party plugin [{}]' ,(json.loads(p_info)['title'],))
+            self._post_plugin_install(get.plugin_name)
             return public.return_message(0, 0, public.lang("Installation succeeded!"))
         public.ExecShell("rm -rf " + plugin_path)
         return public.return_message(-1, 0, public.lang("Installation failed"))
