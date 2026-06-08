@@ -67,10 +67,8 @@ body.panel-offline-mode button#import-plugin-zip-fork {
 	left: -9999px !important;
 }
 
-body.panel-offline-mode .n-data-table-empty a,
-body.panel-offline-mode .n-data-table-empty .n-button,
-body.panel-offline-mode .n-empty a,
-body.panel-offline-mode .n-empty .n-button {
+body.panel-offline-mode .n-data-table-empty a[href*='feedback'],
+body.panel-offline-mode .n-empty a[href*='feedback'] {
 	display: none !important;
 }
 

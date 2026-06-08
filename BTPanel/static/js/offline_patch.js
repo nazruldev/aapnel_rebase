@@ -2,10 +2,9 @@
  * Offline / private mode: disable aaPanel account binding and Pro upgrade UI.
  */
 (function () {
-	var offline = !!window.__PANEL_OFFLINE_MODE;
-	if (typeof bt === 'undefined' && !offline) return;
+	if (!window.__PANEL_OFFLINE_MODE) return;
 
-	if (document.body) document.body.classList.add('panel-offline-mode');
+	document.body && document.body.classList.add('panel-offline-mode');
 
 	function stripClassicFeedback() {
 		if (typeof $ === 'undefined') return;

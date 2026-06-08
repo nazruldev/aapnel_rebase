@@ -9326,7 +9326,10 @@ def is_offline_paid_plugin(item):
         ptype = 0
     if ptype == 12:
         try:
-            return int(item.get('endtime', 0)) < 1
+            et = int(item.get('endtime', 0))
+            if et == 0:
+                return False
+            return et < 0
         except:
             return True
     if ptype == 10:
@@ -9519,7 +9522,7 @@ def apply_offline_public_config(result):
 
     pd = get_pd()
     payload['get_pd'] = list(pd) if isinstance(pd, tuple) else pd
-    payload['isPro'] = False
+    payload['isPro'] = True
     payload['pro'] = 0
     payload['ltd'] = 0
     payload['account_limit'] = False

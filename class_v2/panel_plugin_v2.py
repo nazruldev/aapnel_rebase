@@ -406,6 +406,14 @@ class panelPlugin:
                 return False
         return True
 
+    def _soft_find_dict(self, name):
+        res = self.get_soft_find(name)
+        if isinstance(res, dict) and res.get('status') == 0:
+            msg = res.get('message')
+            if isinstance(msg, dict):
+                return msg
+        return None
+
     #检查依赖
     def check_dependent(self,dependent):
         if not dependent: return True
@@ -416,17 +424,17 @@ class panelPlugin:
             if dep.find('|') != -1:
                 names = dep.split('|')
                 for name in names:
-                    pluginInfo = self.get_soft_find(name)['message']
+                    pluginInfo = self._soft_find_dict(name)
                     if not pluginInfo: return True
 
-                    if pluginInfo['setup'] == True:
+                    if pluginInfo.get('setup') == True:
                         status = True
                         break
                     else:
                         status = False
             else:
-                pluginInfo = self.get_soft_find(dep)['message']
-                if pluginInfo['setup'] != True:
+                pluginInfo = self._soft_find_dict(dep)
+                if not pluginInfo or pluginInfo.get('setup') != True:
                     status = False
                     break
         return status
@@ -1323,10 +1331,6 @@ class panelPlugin:
 
         if public.is_offline_mode():
             softList = public.apply_offline_soft_list(softList)
-            if isinstance(softList.get('list'), dict) and isinstance(softList['list'].get('data'), list):
-                softList['list']['data'] = public.filter_offline_soft_items(softList['list']['data'])
-            elif isinstance(softList.get('list'), list):
-                softList['list'] = public.filter_offline_soft_items(softList['list'])
 
         return public.return_message(0, 0,  softList)
 
