@@ -53,6 +53,18 @@ body.panel-offline-mode .appStore-third-tips .n-upload {
 	display: inline-block !important;
 }
 
+body.panel-offline-mode #offline-plugin-zip-btn,
+body.panel-offline-mode #offline-plugin-zip-input {
+	display: none !important;
+}
+
+body.panel-offline-mode .n-data-table-empty a,
+body.panel-offline-mode .n-data-table-empty .n-button,
+body.panel-offline-mode .n-empty a,
+body.panel-offline-mode .n-empty .n-button {
+	display: none !important;
+}
+
 /* Account / update / license banners on Settings & Account pages */
 body.panel-offline-mode [class*='accountIntegration'],
 body.panel-offline-mode [class*='update-panel'],

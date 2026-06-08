@@ -29,6 +29,7 @@
 
 	function isPluginInstallModal(el) {
 		if (!el) return false;
+		if (el.id === 'offline-mirror-modal' || (el.closest && el.closest('#offline-mirror-modal'))) return true;
 		if (el.querySelector && el.querySelector('.item[data-v-1e17ded2], .item')) {
 			var item = el.querySelector('.item[data-v-1e17ded2], .item');
 			if (item && item.querySelector('b')) return true;
@@ -136,12 +137,31 @@
 			});
 	}
 
+	function removeLegacyZipBtn() {
+		var btn = document.getElementById('offline-plugin-zip-btn');
+		if (btn) btn.remove();
+		var input = document.getElementById('offline-plugin-zip-input');
+		if (input) input.remove();
+	}
+
+	function hideAppStoreEmptyFeedback() {
+		document.querySelectorAll('.n-data-table-empty, .n-empty, .n-data-table-td--empty, .n-data-table-tr--empty').forEach(function (el) {
+			var text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+			if (/demand feedback|submit the demand|not found.*feedback|未找到.*反馈|requirements feedback/i.test(text)) {
+				el.querySelectorAll('a, button, .n-button, .btlink, span').forEach(function (node) {
+					node.style.setProperty('display', 'none', 'important');
+				});
+				el.textContent = '';
+			}
+		});
+	}
+
 	function tuneAppStoreUploadBar() {
 		document.querySelectorAll('.appStore-third-tips').forEach(function (box) {
 			box.style.setProperty('display', 'block', 'important');
 			box.style.setProperty('visibility', 'visible', 'important');
 			box.querySelectorAll('.n-button').forEach(function (btn) {
-				if (btn.closest('.n-upload')) {
+				if (btn.closest('.n-upload') || btn.id === 'offline-mirror-btn') {
 					btn.style.removeProperty('display');
 					btn.style.removeProperty('pointer-events');
 					return;
@@ -156,14 +176,233 @@
 				upload.style.setProperty('visibility', 'visible', 'important');
 			});
 		});
+		injectPluginMirrorButton();
+	}
+
+	function postPlugin(action, body) {
+		var params = new URLSearchParams();
+		Object.keys(body || {}).forEach(function (k) {
+			params.append(k, body[k]);
+		});
+		return fetch('/plugin?action=' + action, {
+			method: 'POST',
+			body: params,
+			credentials: 'same-origin',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+		}).then(function (r) {
+			return r.json();
+		});
+	}
+
+	function unwrap(res) {
+		if (res && typeof res.status === 'number' && res.status === 0) return res.message;
+		return res;
+	}
+
+	function btAgentUiEnabled() {
+		var st = window.__BUILTIN_PLUGINS && window.__BUILTIN_PLUGINS.bt_agent;
+		if (!st) return true;
+		return !!(st.installed && st.enabled !== false);
+	}
+
+	function syncAiAssistantVisibility() {
+		var show = btAgentUiEnabled();
+		document.querySelectorAll('.nps-container .nps-box').forEach(function (box) {
+			var img = box.querySelector('img[src*="bt_agent"]');
+			if (!img && !/AI Assistant/i.test(box.textContent || '')) return;
+			if (show) {
+				box.style.removeProperty('display');
+			} else {
+				box.style.setProperty('display', 'none', 'important');
+			}
+		});
+	}
+
+	function refreshBuiltinPlugins() {
+		return postPlugin('get_builtin_plugins', {}).then(function (res) {
+			var data = unwrap(res);
+			if (data && typeof data === 'object') {
+				window.__BUILTIN_PLUGINS = data;
+			}
+			syncAiAssistantVisibility();
+			return data;
+		});
+	}
+
+	function injectBtAgentAppStoreToggle() {
+		if (!location.pathname.includes('/soft')) return;
+		document.querySelectorAll('.n-data-table-tr, tr').forEach(function (row) {
+			if (row.querySelector('.offline-bt-agent-toggle')) return;
+			var img = row.querySelector('img[src*="bt_agent"]');
+			var text = (row.textContent || '').replace(/\s+/g, ' ');
+			if (!img && !(/AI Assistant/i.test(text) && /bt_agent/i.test(text))) return;
+			var cell = row.querySelector('.n-data-table-td:last-child, td:last-child');
+			if (!cell) return;
+			var label = document.createElement('label');
+			label.className = 'offline-bt-agent-toggle';
+			label.style.cssText =
+				'display:inline-flex;align-items:center;gap:6px;margin-left:10px;font-size:12px;cursor:pointer;white-space:nowrap';
+			var cb = document.createElement('input');
+			cb.type = 'checkbox';
+			cb.checked = btAgentUiEnabled();
+			cb.addEventListener('change', function () {
+				postPlugin('set_builtin_plugin_status', {
+					name: 'bt_agent',
+					enabled: cb.checked ? '1' : '0',
+				}).then(function (res) {
+					var data = unwrap(res);
+					if (data && typeof data === 'object') window.__BUILTIN_PLUGINS = data;
+					syncAiAssistantVisibility();
+				});
+			});
+			label.appendChild(cb);
+			label.appendChild(document.createTextNode('Show in panel'));
+			cell.appendChild(label);
+		});
+	}
+
+	function injectPluginMirrorButton() {
+		if (!location.pathname.includes('/soft')) return;
+		document.querySelectorAll('.appStore-third-tips').forEach(function (box) {
+			if (box.querySelector('#offline-mirror-btn')) return;
+			var btn = document.createElement('button');
+			btn.id = 'offline-mirror-btn';
+			btn.type = 'button';
+			btn.className = 'n-button n-button--primary-type n-button--small-type mx-10px';
+			btn.textContent = 'Sync free plugins';
+			btn.addEventListener('click', openPluginMirrorModal);
+			box.appendChild(btn);
+		});
+	}
+
+	function openPluginMirrorModal() {
+		if (document.getElementById('offline-mirror-modal')) return;
+
+		var mask = document.createElement('div');
+		mask.id = 'offline-mirror-modal';
+		mask.className = 'n-modal-container';
+		mask.style.cssText =
+			'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;';
+
+		var dialog = document.createElement('div');
+		dialog.className = 'n-dialog n-dialog--icon-left n-modal';
+		dialog.style.cssText = 'width:720px;max-width:92vw;max-height:85vh;background:var(--n-color,#fff);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.2);display:flex;flex-direction:column;';
+
+		dialog.innerHTML =
+			'<div class="n-dialog__title" style="padding:16px 20px;font-weight:600;border-bottom:1px solid #eee;">Free plugin mirror</div>' +
+			'<div class="n-dialog__content" style="padding:16px 20px;overflow:auto;flex:1;"><p style="margin:0 0 12px;color:#666;">Fetch free plugins from node.aapanel.com, cache locally, then install without cloud.</p><div id="offline-mirror-status">Loading...</div><div id="offline-mirror-list" style="margin-top:12px;"></div></div>' +
+			'<div class="n-dialog__action" style="padding:12px 20px;border-top:1px solid #eee;display:flex;gap:8px;justify-content:flex-end;">' +
+			'<button type="button" class="n-button" id="offline-mirror-close">Close</button>' +
+			'<button type="button" class="n-button n-button--primary-type" id="offline-mirror-sync-selected">Sync selected</button>' +
+			'<button type="button" class="n-button n-button--primary-type" id="offline-mirror-sync-all">Sync all free</button>' +
+			'</div>';
+
+		mask.appendChild(dialog);
+		document.body.appendChild(mask);
+
+		function close() {
+			mask.remove();
+		}
+		mask.addEventListener('click', function (e) {
+			if (e.target === mask) close();
+		});
+		dialog.querySelector('#offline-mirror-close').addEventListener('click', close);
+
+		function renderList(data) {
+			var list = document.getElementById('offline-mirror-list');
+			var status = document.getElementById('offline-mirror-status');
+			if (!data || !data.items) {
+				status.textContent = 'Failed to load catalog';
+				return;
+			}
+			status.textContent = data.total + ' free plugins, ' + data.mirrored + ' cached locally';
+			list.innerHTML =
+				'<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;border-bottom:1px solid #eee;"><th></th><th>Name</th><th>Title</th><th>Version</th><th>Cache</th><th></th></tr></thead><tbody>' +
+				data.items
+					.map(function (item) {
+						var cached = item.mirrored ? 'Yes' : 'No';
+						var installBtn = item.mirrored
+							? '<button type="button" class="n-button n-button--tiny-type mirror-install" data-name="' +
+							  item.name +
+							  '">Install</button>'
+							: '';
+						return (
+							'<tr style="border-bottom:1px solid #f0f0f0;"><td><input type="checkbox" class="mirror-pick" value="' +
+							item.name +
+							'" ' +
+							(item.mirrored ? '' : 'checked') +
+							' /></td><td>' +
+							item.name +
+							'</td><td>' +
+							item.title +
+							'</td><td>' +
+							item.version +
+							'</td><td>' +
+							cached +
+							'</td><td>' +
+							installBtn +
+							'</td></tr>'
+						);
+					})
+					.join('') +
+				'</tbody></table>';
+
+			list.querySelectorAll('.mirror-install').forEach(function (b) {
+				b.addEventListener('click', function () {
+					var name = b.getAttribute('data-name');
+					b.disabled = true;
+					b.textContent = '...';
+					postPlugin('mirror_install_plugin', { name: name }).then(function (res) {
+						alert((res && res.message) || (res && res.msg) || 'Done');
+						loadCatalog();
+						if (res && res.status === 0) location.reload();
+					});
+				});
+			});
+		}
+
+		function loadCatalog() {
+			postPlugin('mirror_list_catalog', { refresh: '1' }).then(function (res) {
+				renderList(unwrap(res));
+			});
+		}
+
+		dialog.querySelector('#offline-mirror-sync-selected').addEventListener('click', function () {
+			var names = [];
+			dialog.querySelectorAll('.mirror-pick:checked').forEach(function (cb) {
+				names.push(cb.value);
+			});
+			if (!names.length) {
+				alert('Select at least one plugin');
+				return;
+			}
+			postPlugin('mirror_sync_plugins', { names: names.join(',') }).then(function (res) {
+				alert(JSON.stringify(unwrap(res)));
+				loadCatalog();
+			});
+		});
+
+		dialog.querySelector('#offline-mirror-sync-all').addEventListener('click', function () {
+			if (!confirm('Download all free plugins? This may take a while.')) return;
+			postPlugin('mirror_sync_plugins', { sync_all: '1' }).then(function (res) {
+				alert(JSON.stringify(unwrap(res)));
+				loadCatalog();
+			});
+		});
+
+		loadCatalog();
 	}
 
 	function stripCommercialUi() {
 		closeCommercialModals();
+		removeLegacyZipBtn();
 		hideAuthBadge();
 		hideAppStorePriceColumn();
 		hideFeedbackUi();
+		hideAppStoreEmptyFeedback();
 		tuneAppStoreUploadBar();
+		syncAiAssistantVisibility();
+		injectBtAgentAppStoreToggle();
 
 		document.querySelectorAll('.pro-badge').forEach(function (el) {
 			el.style.setProperty('display', 'none', 'important');
@@ -195,6 +434,7 @@
 	}
 
 	stripCommercialUi();
+	refreshBuiltinPlugins();
 
 	if (document.documentElement) {
 		new MutationObserver(function () {

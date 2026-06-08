@@ -520,6 +520,7 @@ def bt_cli(u_input = 0):
         print("(26) Keep/Remove local backup when backing up to cloud storage")
         print("(27) Turn on/off panel SSL                  (28) Modify panel security entrance")
         print("(33) lift the explosion-proof limit on the panel")
+        print("(34) Plugin mirror — sync / export / import (offline VPS)")
         print("(0) Cancel")
         print(raw_tip)
         try:
@@ -574,7 +575,7 @@ def bt_cli(u_input = 0):
         exit()
     except: pass
 
-    nums = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,22,23,24,25,26,27,28,33]
+    nums = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,22,23,24,25,26,27,28,33,34]
     if not u_input in nums:
         print(raw_tip)
         print(public.GetMsg("CANCELLED"))
@@ -813,6 +814,24 @@ def bt_cli(u_input = 0):
         public.writeFile(_config_file,json.dumps(_config))
         public.ExecShell('rm -f /www/server/panel/data/limit_login.pl')
         print("|-Aapanel explosion-proof has been turned off")
+    elif u_input == 34:
+        py_bin = public.get_python_bin()
+        os.system("{} {}/script/plugin_mirror_cli.py menu".format(py_bin, public.get_panel_path()))
+
+def run_plugin_mirror_cli(args):
+    """bt plugin [list|sync-all|sync|install|export|import|install-all]"""
+    py_bin = public.get_python_bin()
+    panel = public.get_panel_path()
+    script = panel + '/script/plugin_mirror_cli.py'
+    if not os.path.exists(script):
+        print('ERROR: plugin_mirror_cli.py not found')
+        return
+    cmd = [py_bin, script]
+    if not args:
+        cmd.append('menu')
+    else:
+        cmd.extend(args)
+    os.execv(py_bin, cmd)
 
 # 旧的插件系统升级到新的插件系统
 def upgrade_plugins():
@@ -886,5 +905,7 @@ if __name__ == "__main__":
         bt_cli(clinum)
     elif type == "upgrade_plugins":
         upgrade_plugins()
+    elif type == "plugin":
+        run_plugin_mirror_cli(sys.argv[2:])
     else:
         print('ERROR: Parameter error')

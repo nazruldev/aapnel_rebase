@@ -7,6 +7,15 @@
 
 	if (document.body) document.body.classList.add('panel-offline-mode');
 
+	function stripClassicFeedback() {
+		if (typeof $ === 'undefined') return;
+		$('#offline-plugin-zip-btn, #offline-plugin-zip-input').remove();
+		$('.feedback-btn, .toolbar-right .feedback, .icon-demand').remove();
+		$('.n-data-table-empty a, .n-data-table-empty .n-button').each(function () {
+			if (/feedback|demand feedback/i.test($(this).text())) $(this).remove();
+		});
+	}
+
 	if (typeof bt !== 'undefined') {
 		bt.set_cookie('pro_end', 0);
 		bt.set_cookie('ltd_end', 0);
@@ -39,6 +48,7 @@
 		}
 
 		bt.openFeedback = noop;
+		stripClassicFeedback();
 
 		if (typeof index !== 'undefined') {
 			index.check_update = noop;
@@ -64,6 +74,7 @@
 
 	function stripCommercialUi() {
 		if (typeof $ === 'undefined') return;
+		stripClassicFeedback();
 		$(
 			'#updata_pro_info, .product-buy, .authState, .bind-user, .daily-product-buy, .openLtd, #is_ltd, .btpro-free, .btpro-gray, .updata_pro, .showprofun, .alert-ltd-success, .feedback-btn, .toolbar-right .feedback, .icon-demand'
 		).remove();

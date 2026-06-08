@@ -9185,7 +9185,11 @@ def load_soft_list(force: bool = True, retry_count: int = 0):
 
     if is_offline_mode():
         if not os.path.exists(local_cache_file) or os.path.getsize(local_cache_file) < 10:
-            return {'pro': 0, 'ltd': 0, 'list': []}
+            try:
+                import offline_plugin_mirror as mirror
+                mirror.fetch_cloud_soft_list(force_update=True)
+            except:
+                return {'pro': 0, 'ltd': 0, 'list': []}
     elif force or not os.path.exists(local_cache_file) or os.path.getsize(local_cache_file) < 10:
         # 如果是重试，sleep一段时间
         if retry_count > 0:
@@ -9292,8 +9296,14 @@ def filter_offline_soft_items(items):
     for item in items:
         if not isinstance(item, dict):
             continue
-        if _is_offline_uninstallable_plugin(item):
-            continue
+        if public._is_offline_uninstallable_plugin(item):
+            if not public.has_local_plugin_mirror(item.get('name')):
+                try:
+                    import builtin_plugins as bp
+                    if item.get('name') not in bp.WHITELIST_SOFT_NAMES:
+                        continue
+                except:
+                    continue
         try:
             if int(item.get('endtime', 0)) < 0:
                 item['endtime'] = 0
@@ -9326,6 +9336,16 @@ def _is_offline_uninstallable_plugin(item):
     if isinstance(vers, list) and vers and isinstance(vers[0], dict) and 'download' in vers[0]:
         return True
     return False
+
+
+def has_local_plugin_mirror(name):
+    if not name:
+        return False
+    try:
+        import offline_plugin_mirror as mirror
+        return mirror.has_mirror(name)
+    except:
+        return False
 
 
 def filter_conditional_menus(menu_list):

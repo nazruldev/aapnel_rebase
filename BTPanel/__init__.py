@@ -945,6 +945,11 @@ def index_new(sub_path: str = ''):
     data['translations'] = base64.b64encode(json.dumps(load_translations()).encode()).decode()
     data['public_key'] = public.get_rsa_public_key().replace("\n", "")
     data['offline_mode'] = public.is_offline_mode()
+    try:
+        import builtin_plugins as bp
+        data['builtin_plugins'] = bp.get_public_status()
+    except:
+        data['builtin_plugins'] = {}
     return render_template('index_new.html', data=data)
 
 
@@ -1750,11 +1755,11 @@ def task(pdata=None):
 
 @app.route('/plugin', methods=method_all)
 def plugin(pdata=None):
-    # 插件系统接口
+    # 插件系统接口 — use v2 implementation (offline mirror + soft find fixes)
     comReturn = comm.local()
     if comReturn: return comReturn
-    import panelPlugin
-    pluginObject = panelPlugin.panelPlugin()
+    import panel_plugin_v2
+    pluginObject = panel_plugin_v2.panelPlugin()
     defs = ('get_usually_plugin', 'check_install_limit', 'set_score',
             'get_score', 'update_zip', 'input_zip', 'export_zip', 'add_index',
             'remove_index', 'sort_index', 'install_plugin', 'uninstall_plugin',
@@ -1763,7 +1768,9 @@ def plugin(pdata=None):
             'install', 'unInstall', 'getPluginList', 'getPluginInfo',
             'get_make_args', 'add_make_args', 'getPluginStatus',
             'setPluginStatus', 'a', 'getCloudPlugin', 'getConfigHtml',
-            'savePluginSort', 'del_make_args', 'set_make_args')
+            'savePluginSort', 'del_make_args', 'set_make_args', 'get_download_speed',
+            'mirror_list_catalog', 'mirror_sync_plugins', 'mirror_install_plugin',
+            'get_builtin_plugins', 'set_builtin_plugin_status')
     return publicObject(pluginObject, defs, None, pdata)
 
 
@@ -5342,7 +5349,9 @@ def plugin_v2(pdata=None):
             'install', 'unInstall', 'getPluginList', 'getPluginInfo',
             'get_make_args', 'add_make_args', 'getPluginStatus',
             'setPluginStatus', 'a', 'getCloudPlugin', 'getConfigHtml',
-            'savePluginSort', 'del_make_args', 'set_make_args', 'get_download_speed')
+            'savePluginSort', 'del_make_args', 'set_make_args', 'get_download_speed',
+            'mirror_list_catalog', 'mirror_sync_plugins', 'mirror_install_plugin',
+            'get_builtin_plugins', 'set_builtin_plugin_status')
     return publicObject(pluginObject, defs, None, pdata)
 
 

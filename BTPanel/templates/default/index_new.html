@@ -15,6 +15,7 @@
 		<title>{{session['title']}}</title>
 		<script>
 			window.__PANEL_OFFLINE_MODE = {{ 'true' if data.get('offline_mode') else 'false' }};
+			window.__BUILTIN_PLUGINS = {{ data.get('builtin_plugins', {}) | tojson }};
 			window.sites_path = "{{session['config']['sites_path']}}"
 			window.webserver = "{{session['webserver']}}"
 			window.distribution = "{{session['config']['distribution']}}"

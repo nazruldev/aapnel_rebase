@@ -346,6 +346,9 @@ case "$1" in
         'panel')
         		$pythonV $panel_path/tools.py cli $2
         		;;
+        'plugin')
+        		$pythonV $panel_path/tools.py plugin "${@:2}"
+        		;;
         'default')
                 port=$(cat $panel_path/data/port.pl)
                 password=$(cat $panel_path/default.pl)

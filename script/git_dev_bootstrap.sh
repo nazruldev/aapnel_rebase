@@ -332,4 +332,18 @@ install_default_stack() {
 }
 install_default_stack
 
+install_builtin_plugins() {
+  if [ "${INSTALL_BUILTIN_PLUGINS:-1}" != "1" ]; then
+    echo "==> Skip built-in plugins (INSTALL_BUILTIN_PLUGINS=0)"
+    return 0
+  fi
+  local py
+  py="$(pyenv_python_bin)" || true
+  if [ -n "$py" ] && [ -f "$PANEL/script/ensure_builtin_plugins.py" ]; then
+    echo "==> Built-in plugins: AI Assistant (bt_agent)"
+    "$py" "$PANEL/script/ensure_builtin_plugins.py" || echo "WARN: bt_agent install failed — sync App List then re-run ensure_builtin_plugins.py"
+  fi
+}
+install_builtin_plugins
+
 open_firewall_hint

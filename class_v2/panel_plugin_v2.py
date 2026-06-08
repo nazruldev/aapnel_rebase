@@ -548,7 +548,11 @@ class panelPlugin:
         if get.sName in ['nginx', 'apache' , 'openlitespeed'] and public.get_multi_webservice_status() and get.get('upgrade'):
             get.Skip = True
 
-        pluginInfo = self.get_soft_find(get.sName)['message']
+        pluginFind = self.get_soft_find(get)
+        if not isinstance(pluginFind, dict) or pluginFind.get('status') != 0:
+            msg = pluginFind.get('message') if isinstance(pluginFind, dict) else 'failed to get soft info'
+            return public.return_message(-1, 0, msg if isinstance(msg, str) else public.lang('failed to get soft info'))
+        pluginInfo = pluginFind['message']
         get.pluginInfo = pluginInfo
         check_result = self.check_install_limit(get)
         if check_result and get.get('Skip', False) not in [True,'true']:  # 判断是否跳过排斥检查。仅用于多服务相关插件
@@ -594,6 +598,12 @@ class panelPlugin:
     #同步安装
     def install_sync(self,pluginInfo,get):
         if public.is_offline_mode():
+            try:
+                import offline_plugin_mirror as mirror
+                if mirror.has_mirror(pluginInfo.get('name')):
+                    return mirror.install_from_mirror(pluginInfo.get('name'))
+            except:
+                pass
             if public._is_offline_uninstallable_plugin(pluginInfo):
                 return public.return_msg_gettext(
                     False,
@@ -786,6 +796,14 @@ class panelPlugin:
             session['init_cloud'] = True
 
         softList = public.load_soft_list(True if force == 1 else False)
+
+        if public.is_offline_mode() and isinstance(softList, dict) and not softList.get('list'):
+            try:
+                import offline_plugin_mirror as mirror
+                mirror.fetch_cloud_soft_list(force_update=True)
+                softList = public.load_soft_list(force=True)
+            except:
+                pass
 
         if get and 'init' in get:
             if softList:
@@ -1462,6 +1480,12 @@ class panelPlugin:
             if os.path.exists(pid_file):
                 pid = int(public.readFile(pid_file))
                 softInfo['status'] = public.pid_exists(pid)
+        try:
+            import builtin_plugins as bp
+            if softInfo.get('name') in bp.PLUGINS:
+                softInfo['builtin_ui'] = bp.is_ui_enabled(softInfo['name'])
+        except:
+            pass
         return softInfo
     def is_beta_plugin(self, plugin_name):
         '''
@@ -1525,19 +1549,82 @@ class panelPlugin:
 
 
     #获取指定软件信息
-    def get_soft_find(self,get = None):
-        if not self.__plugin_s_list:
-            softList = self.get_cloud_list(get)['list']
-            self.__plugin_s_list = self.set_coexist(softList)
+    def _ensure_plugin_soft_list(self, get=None, force=False):
+        if force:
+            self.__plugin_s_list = []
+        if self.__plugin_s_list:
+            return self.__plugin_s_list
 
+        soft_list_wrap = self.get_cloud_list(get)
+        items = soft_list_wrap.get('list') if isinstance(soft_list_wrap, dict) else soft_list_wrap
+        if isinstance(items, dict) and isinstance(items.get('data'), list):
+            items = items['data']
+
+        if (not items or not isinstance(items, list)) and public.is_offline_mode():
+            try:
+                import offline_plugin_mirror as mirror
+                cloud = mirror.fetch_cloud_soft_list(force_update=False)
+                items = cloud.get('list') if isinstance(cloud, dict) else []
+            except:
+                items = []
+
+        if not items or not isinstance(items, list):
+            try:
+                raw = public.load_soft_list(force=True)
+                items = raw.get('list') if isinstance(raw, dict) else []
+            except:
+                items = []
+
+        if not isinstance(items, list):
+            items = []
+
+        self.__plugin_s_list = self.set_coexist(items)
+        return self.__plugin_s_list
+
+    def _soft_find_from_local_plugin(self, sName):
+        info_path = '{}/{}/info.json'.format(self.__plugin_path, sName)
+        if not os.path.exists(info_path):
+            return None
+        try:
+            info = json.loads(public.readFile(info_path))
+        except:
+            return None
+        if not isinstance(info, dict) or info.get('name') != sName:
+            return None
+        info.setdefault('setup', True)
+        info.setdefault('install_checks', '{}/{}'.format(self.__plugin_path, sName))
+        return self.check_status(info)
+
+    def _soft_find_from_raw_catalog(self, sName):
+        items = []
+        try:
+            import offline_plugin_mirror as mirror
+            raw = mirror.fetch_cloud_soft_list(force_update=False)
+            items = raw.get('list') if isinstance(raw, dict) else []
+        except:
+            pass
+        if not items:
+            try:
+                import PluginLoader
+                raw = PluginLoader.get_plugin_list(0)
+                items = raw.get('list') if isinstance(raw, dict) else []
+            except:
+                items = []
+        if not isinstance(items, list):
+            return None
+        for softInfo in self.set_coexist(items):
+            if softInfo.get('name') == sName:
+                return self.check_status(softInfo)
+        return None
+
+    def get_soft_find(self,get = None):
         try:
             sName = get['sName']
         except:
             sName = get
 
-        for softInfo in self.__plugin_s_list:
-
-            if softInfo['name'] == sName:
+        for softInfo in self._ensure_plugin_soft_list(get):
+            if softInfo.get('name') == sName:
                 if sName == 'phpmyadmin':
                     # 检查是否需要开启SSL
                     if os.path.exists('{}/data/phpmyadmin_ssl.mark'.format(public.get_panel_path())) and os.path.exists('{}/phpmyadmin'.format(public.get_setup_path())):
@@ -1565,6 +1652,21 @@ class panelPlugin:
                 data = self.check_status(softInfo)
 
                 return public.success_v2(data)
+
+        local_info = self._soft_find_from_local_plugin(sName)
+        if local_info:
+            return public.success_v2(local_info)
+
+        raw_info = self._soft_find_from_raw_catalog(sName)
+        if raw_info:
+            return public.success_v2(raw_info)
+
+        self.__plugin_s_list = []
+        for softInfo in self._ensure_plugin_soft_list(get, force=True):
+            if softInfo.get('name') == sName:
+                data = self.check_status(softInfo)
+                return public.success_v2(data)
+
         return public.fail_v2('failed to get soft info')
 
     def _check_mail_sys(self, args):
@@ -2681,8 +2783,30 @@ class panelPlugin:
             if isRemove:
                 self.SetField(get.name, 'display', int(get.status))
         else:
+            if get.name in __import__('builtin_plugins').WHITELIST_SOFT_NAMES:
+                __import__('builtin_plugins').set_ui_enabled(get.name, int(get.status) != 0)
             self.SetField(get.name, 'display', int(get.status))
         return public.return_message(0, 0, public.lang("Setup successfully!"))
+
+    def get_builtin_plugins(self, get=None):
+        import builtin_plugins as bp
+        return public.return_message(0, 0, bp.get_public_status())
+
+    def set_builtin_plugin_status(self, get):
+        import builtin_plugins as bp
+        name = getattr(get, 'name', None) or getattr(get, 'sName', None)
+        if not name or name not in bp.PLUGINS:
+            return public.return_message(-1, 0, public.lang('Please specify the software name!'))
+        enabled = getattr(get, 'enabled', None)
+        if enabled is None and hasattr(get, 'status'):
+            enabled = get.status
+        enabled = str(enabled).lower() in ('1', 'true', 'yes', 'on')
+        if not bp.is_installed(name):
+            bp.ensure_installed(name)
+        if not bp.is_installed(name):
+            return public.return_message(-1, 0, public.lang('Plugin is not installed'))
+        bp.set_ui_enabled(name, enabled)
+        return public.return_message(0, 0, bp.get_public_status())
 
     #从云端获取插件列表
     def getCloudPlugin(self,get):
@@ -3626,4 +3750,30 @@ class panelPlugin:
             return
         except:
             pass
+
+    # --- Offline plugin mirror (free plugins from node.aapanel.com) ---
+    def mirror_list_catalog(self, get=None):
+        import offline_plugin_mirror as mirror
+        refresh = False
+        if get and hasattr(get, 'refresh'):
+            refresh = str(get.refresh).lower() in ('1', 'true', 'yes')
+        return public.return_message(0, 0, mirror.list_catalog(refresh=refresh))
+
+    def mirror_sync_plugins(self, get):
+        import offline_plugin_mirror as mirror
+        sync_all = hasattr(get, 'sync_all') and str(get.sync_all).lower() in ('1', 'true', 'yes')
+        names = getattr(get, 'names', '') or getattr(get, 'plugin_names', '')
+        return mirror.sync_plugins(names=names or None, sync_all_free=sync_all)
+
+    def mirror_install_plugin(self, get):
+        import offline_plugin_mirror as mirror
+        name = getattr(get, 'name', None) or getattr(get, 'sName', None)
+        if not name:
+            return public.return_message(-1, 0, public.lang('Please specify the software name!'))
+        result = mirror.install_from_mirror(name)
+        if isinstance(result, dict) and result.get('status') is True:
+            return public.return_message(0, 0, result.get('msg'))
+        if isinstance(result, dict):
+            return public.return_message(-1, 0, result.get('msg', 'Install failed'))
+        return public.return_message(-1, 0, str(result))
 
