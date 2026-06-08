@@ -25,6 +25,12 @@ if PANEL not in sys.path:
     sys.path.insert(0, PANEL)
 sys.path.insert(0, os.path.join(PANEL, 'class'))
 
+try:
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+except Exception:
+    pass
+
 import offline_plugin_mirror as mirror  # noqa: E402
 
 if sys.version_info[0] == 3:

@@ -175,6 +175,89 @@ def list_catalog(refresh=False):
     return {'ok': True, 'items': catalog, 'total': len(catalog), 'mirrored': sum(1 for x in catalog if x['mirrored'])}
 
 
+def _download_plugin_from_cloud(name, version):
+    """Download plugin ZIP via aaPanel download_plugin API."""
+    import json
+    import requests
+
+    panel_path = public.get_panel_path()
+    tmp_path = '{}/temp'.format(panel_path)
+    if not os.path.exists(tmp_path):
+        os.makedirs(tmp_path, mode=0o755)
+    filename = '{}/{}.zip'.format(tmp_path, name)
+    if os.path.isfile(filename):
+        os.remove(filename)
+
+    url = '{}/api/panel/download_plugin'.format(public.sync_plugin_OfficialApiBase())
+    pdata = public.get_user_info() or {}
+    if not isinstance(pdata, dict):
+        pdata = {}
+    try:
+        import panelAuth
+        auth = panelAuth.panelAuth().create_serverid(None)
+        if isinstance(auth, dict) and auth.get('status') is None:
+            for key in ('server_id', 'token', 'uid', 'username'):
+                if auth.get(key) and not pdata.get(key):
+                    pdata[key] = auth[key]
+    except:
+        pass
+    pdata['name'] = name
+    pdata['version'] = version
+    pdata['os'] = 'Linux'
+    pdata['environment_info'] = json.dumps(public.fetch_env_info(), ensure_ascii=False)
+
+    try:
+        headers = public.get_requests_headers()
+    except:
+        headers = {'user-agent': 'aaPanel/1.0'}
+
+    try:
+        resp = requests.post(url, pdata, headers=headers, timeout=(60, 1800), stream=True, verify=False)
+    except Exception as ex:
+        raise public.PanelError(str(ex))
+
+    if not resp.ok:
+        raise public.PanelError('Download failed (HTTP {})'.format(resp.status_code))
+
+    try:
+        headers_total_size = int(resp.headers.get('File-size', 0))
+    except:
+        headers_total_size = 0
+
+    if headers_total_size <= 0:
+        try:
+            err = resp.json()
+            if isinstance(err, dict):
+                msg = err.get('msg') or err.get('message')
+                if msg:
+                    raise public.PanelError(str(msg))
+        except public.PanelError:
+            raise
+        except:
+            pass
+        text = (resp.text or '')[:500]
+        if '<html>' in text.lower():
+            msg = public.error_conn_cloud(resp.text) if hasattr(public, 'error_conn_cloud') else text
+            raise public.PanelError(msg)
+        raise public.PanelError(text or 'Download failed for {}'.format(name))
+
+    with open(filename, 'wb') as out:
+        for chunk in resp.iter_content(chunk_size=256 * 1024):
+            if chunk:
+                out.write(chunk)
+
+    content_md5 = resp.headers.get('Content-md5')
+    if content_md5 and public.FileMd5(filename) != content_md5:
+        os.remove(filename)
+        raise public.PanelError('Verify package checksum failed.')
+
+    if not os.path.isfile(filename) or os.path.getsize(filename) < 100:
+        if os.path.isfile(filename):
+            os.remove(filename)
+        raise public.PanelError('Empty package for {}'.format(name))
+    return filename
+
+
 def _download_plugin_zip(item):
     name = item['name']
     vers = item.get('versions') or []
@@ -202,17 +285,10 @@ def _download_plugin_zip(item):
                 public.ExecShell('rm -f {}'.format(tmp))
                 raise public.PanelError('MD5 mismatch for {}'.format(name))
     else:
-        import panel_plugin_v2
-        plugin_obj = panel_plugin_v2.panelPlugin()
         version = _plugin_version_key(item)
         if not version or version == '.':
             version = '{}.{}'.format(v0.get('m_version', '1'), v0.get('version', '0'))
-        result = plugin_obj._download_plugin(name, version)
-        if isinstance(result, dict) and result.get('status') is False:
-            raise public.PanelError(result.get('msg') or 'Download failed')
-        src = '/www/server/panel/temp/{}.zip'.format(name)
-        if not os.path.isfile(src):
-            raise public.PanelError('Download failed for {}'.format(name))
+        src = _download_plugin_from_cloud(name, version)
         import shutil
         shutil.copyfile(src, tmp)
 
