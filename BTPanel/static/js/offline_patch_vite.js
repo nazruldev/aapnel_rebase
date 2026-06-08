@@ -42,7 +42,7 @@
 
 	function shouldHideText(text, el) {
 		if (!text) return false;
-		if (el && isAppStoreUploadArea(el)) return false;
+		if (el && (isAppStoreUploadArea(el) || isProtectedPanelArea(el))) return false;
 		var t = String(text).replace(/\s+/g, ' ').trim();
 		if (!t || t.length > 120) return false;
 		if (/aapanel\.com|bt\.cn/i.test(t) && el && (isAppStoreUploadArea(el) || el.closest('.n-dialog, .n-modal'))) {
@@ -51,18 +51,29 @@
 		return COMMERCIAL_RE.test(t);
 	}
 
+	function isProtectedPanelArea(el) {
+		if (!el || !el.closest) return false;
+		return !!el.closest(
+			'.n-card, .n-card__content, .n-card-content, .n-data-table, .n-layout, ' +
+				'.n-layout-content, .n-tab-pane, .n-tabs, .main-content, #container, ' +
+				'.soft-content, .site-content, .home-content, .n-form, .n-descriptions, ' +
+				'.n-list, .n-collapse, .n-card-header, .n-card__header, #offline-mirror-modal'
+		);
+	}
+
 	function hideNode(el) {
 		if (!el || !el.parentNode || isAppStoreUploadArea(el)) return;
+		if (isProtectedPanelArea(el)) return;
 		if (isPluginInstallModal(el.closest ? el.closest('.n-modal, .n-dialog, .n-modal-container') : null)) {
 			return;
 		}
 		var parent = el.closest
 			? el.closest(
-					'.pro-badge, .product-buy, .daily-product-buy, .showprofun, .alert, .n-alert, .n-button, .n-card, button, a, .n-modal, .n-dialog'
+					'.pro-badge, .product-buy, .daily-product-buy, .showprofun, .alert, .n-alert, .n-button, button, a, .n-modal, .n-dialog'
 			  )
 			: null;
 		if (parent && parent !== document.body) {
-			if (isAppStoreUploadArea(parent) || isPluginInstallModal(parent)) return;
+			if (isAppStoreUploadArea(parent) || isPluginInstallModal(parent) || isProtectedPanelArea(parent)) return;
 			if (
 				parent.classList &&
 				(parent.classList.contains('n-button') ||
@@ -72,11 +83,14 @@
 					parent.classList.contains('n-modal') ||
 					parent.classList.contains('n-dialog'))
 			) {
+				parent.setAttribute('data-offline-hide', '1');
 				parent.style.setProperty('display', 'none', 'important');
 				parent.style.setProperty('pointer-events', 'none', 'important');
 				return;
 			}
 		}
+		if (el.getAttribute('data-offline-hide') === '1') return;
+		el.setAttribute('data-offline-hide', '1');
 		el.style.setProperty('display', 'none', 'important');
 		el.style.setProperty('pointer-events', 'none', 'important');
 	}
@@ -419,17 +433,27 @@
 			});
 
 		document.querySelectorAll('a[href*="aapanel.com"], a[href*="bt.cn"]').forEach(function (el) {
-			if (isAppStoreUploadArea(el)) return;
+			if (isAppStoreUploadArea(el) || isProtectedPanelArea(el)) return;
 			if (el.closest('.n-dialog, .n-modal') && isPluginInstallModal(el.closest('.n-dialog, .n-modal'))) {
 				return;
 			}
 			el.parentNode && el.parentNode.removeChild(el);
 		});
 
-		document.querySelectorAll('button, a, .n-button, .btlink, span, div, p, h1, h2, h3, h4').forEach(function (el) {
-			if (el.children && el.children.length > 4) return;
-			if (isAppStoreUploadArea(el)) return;
+		document.querySelectorAll('button, a, .n-button, .btlink').forEach(function (el) {
+			if (isAppStoreUploadArea(el) || isProtectedPanelArea(el)) return;
+			if (el.getAttribute('data-offline-hide') === '1') return;
 			if (shouldHideText(el.textContent, el)) hideNode(el);
+		});
+	}
+
+	var stripScheduled = false;
+	function scheduleStripCommercialUi() {
+		if (stripScheduled) return;
+		stripScheduled = true;
+		requestAnimationFrame(function () {
+			stripScheduled = false;
+			stripCommercialUi();
 		});
 	}
 
@@ -438,7 +462,7 @@
 
 	if (document.documentElement) {
 		new MutationObserver(function () {
-			stripCommercialUi();
+			scheduleStripCommercialUi();
 		}).observe(document.documentElement, {
 			childList: true,
 			subtree: true,

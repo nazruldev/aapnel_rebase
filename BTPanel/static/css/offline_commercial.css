@@ -74,3 +74,11 @@ body.panel-offline-mode .license-modal,
 body.panel-offline-mode .pay-modal {
 	display: none !important;
 }
+
+/* Keep card body visible — commercial strip must not collapse n-card content */
+body.panel-offline-mode .n-card__content,
+body.panel-offline-mode .n-card-content {
+	display: block !important;
+	visibility: visible !important;
+	min-height: 1px;
+}
