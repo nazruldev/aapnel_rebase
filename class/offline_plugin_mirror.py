@@ -88,6 +88,52 @@ def is_mirror_plugin(item):
     return t in (4, 5, 8, 10, 12)
 
 
+def _load_panel_userinfo(require_token=True):
+    """Read bound aaPanel cloud account (absolute path; accepts access_token, not only JWT)."""
+    user_path = '{}/data/userInfo.json'.format(public.get_panel_path())
+    if not os.path.isfile(user_path):
+        if require_token:
+            raise public.PanelError(
+                'aaPanel account not bound. Panel → Settings → aaPanel account → login.')
+        return {}
+
+    try:
+        data = json.loads(public.readFile(user_path) or '{}')
+    except Exception:
+        data = {}
+
+    if not isinstance(data, dict) or not data:
+        if require_token:
+            raise public.PanelError('userInfo.json is empty. Re-login via Panel → Settings → aaPanel account.')
+        return {}
+
+    token = data.get('token') or data.get('access_token') or data.get('jwt')
+    if token and not data.get('token'):
+        data['token'] = token
+
+    if require_token and not token:
+        raise public.PanelError(
+            'No token in userInfo.json. Re-login via Panel → Settings → aaPanel account.')
+
+    if data.get('id') is not None and not data.get('uid'):
+        data['uid'] = data['id']
+
+    if not data.get('server_id'):
+        try:
+            data['server_id'] = public.gen_server_id()
+        except Exception:
+            try:
+                data['server_id'] = public.get_server_id()
+            except Exception:
+                data['server_id'] = public.md5(public.get_mac_address())
+        try:
+            public.writeFile(user_path, json.dumps(data))
+        except Exception:
+            pass
+
+    return data
+
+
 def fetch_cloud_soft_list(force_update=True):
     """Pull encrypted soft list from aaPanel cloud (works even when offline_mode is on)."""
     panel_path = public.get_panel_path()
@@ -95,12 +141,11 @@ def fetch_cloud_soft_list(force_update=True):
     cloud_url = '{}/api/panel/getSoftListEn'.format(public.OfficialApiBase())
     pdata = {}
     try:
-        import panelAuth
-        auth = panelAuth.panelAuth().create_serverid(None)
-        if isinstance(auth, dict) and auth.get('status') is None:
-            pdata = auth
-    except:
-        pass
+        pdata = _load_panel_userinfo(require_token=False)
+    except public.PanelError:
+        pdata = {}
+    except Exception:
+        pdata = {}
     if not isinstance(pdata, dict):
         pdata = {}
     if not pdata.get('server_id'):
@@ -161,23 +206,7 @@ def _plugin_version_candidates(item):
 
 
 def _get_cloud_auth_pdata():
-    """Require bound aaPanel account (data/userInfo.json with JWT token)."""
-    try:
-        import panelAuth
-        auth = panelAuth.panelAuth().create_serverid(None)
-    except Exception as ex:
-        raise public.PanelError(
-            'Please bind aaPanel account first (Panel → Settings → aaPanel account). ({})'.format(ex))
-
-    if not isinstance(auth, dict):
-        raise public.PanelError('Please bind aaPanel account first (Panel → Settings → aaPanel account).')
-    if auth.get('status') is False:
-        msg = auth.get('msg') or auth.get('message') or 'Please bind aaPanel account first.'
-        raise public.PanelError(str(msg))
-    if not auth.get('token'):
-        raise public.PanelError(
-            'aaPanel account token missing. Log in via Panel → Settings → aaPanel account, then retry sync.')
-    return dict(auth)
+    return _load_panel_userinfo(require_token=True)
 
 
 def _parse_download_http_error(resp):
