@@ -593,8 +593,13 @@ class panelPlugin:
 
     #同步安装
     def install_sync(self,pluginInfo,get):
-        if public.is_offline_mode() and pluginInfo.get('versions') and 'download' in pluginInfo['versions'][0]:
-            return public.return_msg_gettext(False, public.lang("Offline mode: import plugins via ZIP in App Store"))
+        if public.is_offline_mode():
+            if public._is_offline_uninstallable_plugin(pluginInfo):
+                return public.return_msg_gettext(
+                    False,
+                    public.lang("Offline mode: import compatible plugins via ZIP in App Store"))
+            if pluginInfo.get('versions') and isinstance(pluginInfo['versions'], list) and pluginInfo['versions'] and 'download' in pluginInfo['versions'][0]:
+                return public.return_msg_gettext(False, public.lang("Offline mode: import plugins via ZIP in App Store"))
         import panelAuth
         try:
             token = panelAuth.panelAuth().create_serverid(None)['token']
@@ -1119,6 +1124,8 @@ class panelPlugin:
 
     #检查权限
     def check_accept(self,get):
+        if public.is_offline_mode():
+            return True
         args = public.dict_obj()
         args.type = '8'
         p_list = self.get_cloud_list(args)
@@ -1180,7 +1187,8 @@ class panelPlugin:
         query = get.get('query', '').strip().lower()
         softList['m_list'] = []
         if query and (query in 'docker' or query in 'module'):
-            softList['m_list'].append(
+            if os.path.exists('/www/server/panel/plugin/docker'):
+                softList['m_list'].append(
               {
                 'name': 'docker',
                 "title": "Docker Module",
@@ -1191,7 +1199,8 @@ class panelPlugin:
               }
             )
         if query and (query in 'wp toolkit' or query in 'module' or query in 'wordpress'):
-            softList['m_list'].append(
+            if os.path.exists('/www/server/panel/plugin/wptools'):
+                softList['m_list'].append(
                 {
                     'name': 'wptools',
                     "title": "WP Toolkit",
@@ -1201,6 +1210,13 @@ class panelPlugin:
                     "ps": "The toolkit specifically designed for Wordpress management provided by aaPanel <a class='btlink' href='/wp/toolkit'>>>Go</a>",
                 }
             )
+
+        if public.is_offline_mode():
+            softList = public.apply_offline_soft_list(softList)
+            if isinstance(softList.get('list'), dict) and isinstance(softList['list'].get('data'), list):
+                softList['list']['data'] = public.filter_offline_soft_items(softList['list']['data'])
+            elif isinstance(softList.get('list'), list):
+                softList['list'] = public.filter_offline_soft_items(softList['list'])
 
         return public.return_message(0, 0,  softList)
 
@@ -2921,7 +2937,29 @@ class panelPlugin:
         return public.return_message(0, 0, data)
     #导入插件包
     def input_zip(self,get):
-        if not hasattr(get, 'tmp_path') or not os.path.exists(get.tmp_path):
+        tmp_path = getattr(get, 'tmp_path', '')
+        if not tmp_path or not os.path.exists(tmp_path):
+            plugin_name = getattr(get, 'plugin_name', '')
+            if plugin_name:
+                alt = '/www/server/panel/temp/{}'.format(plugin_name)
+                if os.path.exists(alt):
+                    tmp_path = alt
+                    get.tmp_path = tmp_path
+                else:
+                    base = '/www/server/panel/temp'
+                    if os.path.isdir(base):
+                        for df in os.walk(base):
+                            if 'info.json' in df[2] and 'install.sh' in df[2]:
+                                p_info = os.path.join(df[0], 'info.json')
+                                try:
+                                    info = json.loads(public.ReadFile(p_info))
+                                    if info.get('name') == plugin_name:
+                                        tmp_path = df[0]
+                                        get.tmp_path = tmp_path
+                                        break
+                                except:
+                                    pass
+        if not tmp_path or not os.path.exists(tmp_path):
             return public.return_message(-1, 0, public.lang("Temporary file does NOT exist, please re-upload!"))
         plugin_path = '/www/server/panel/plugin/' + get.plugin_name
         if not os.path.exists(plugin_path): os.makedirs(plugin_path)
@@ -2930,7 +2968,10 @@ class panelPlugin:
         self.set_pyenv(plugin_path + '/install.sh')
         public.ExecShell('cd ' + plugin_path + ' && bash install.sh install &> /tmp/panelShell.pl')
         p_info = public.ReadFile(plugin_path + '/info.json')
-        public.ExecShell("rm -rf /www/server/panel/temp/*")
+        if os.path.isdir(tmp_path) and tmp_path.startswith('/www/server/panel/temp'):
+            public.ExecShell("rm -rf " + tmp_path)
+        else:
+            public.ExecShell("rm -rf /www/server/panel/temp/*")
         if p_info:
             #----- 增加图标复制 hwliang<2021-03-23> -----#
             icon_sfile = plugin_path + '/icon.png'

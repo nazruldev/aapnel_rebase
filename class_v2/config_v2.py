@@ -2704,6 +2704,7 @@ class config:
         ]
         result = self.__make_sure_enable_menu(result)
         uid = session.get('uid', 0)
+        result = public.filter_conditional_menus(result)
 
         if session.get("tmp_login"):  # template login all mune
             return public.return_message(0, 0, sorted(result, key=lambda x: x['sort']))

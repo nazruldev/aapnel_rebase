@@ -462,10 +462,10 @@ var soft = {
                 }
             ],
             data: data,
-						empty:'<a class="btlink"  onClick="javascript:bt.openFeedback({title:\'aaPanel demand feedback collection\',placeholder:\'<span>If you encounter any problems or imperfect functions during use, please describe <br> your problems or needs to us in detail, we will try our best to solve or improve for <br> you</span>\',recover:\'We pay special attention to your requirements feedback, and we conduct regular weekly requirements reviews. I hope I can help you better\',key:993,proType:2});" style="margin-left: 10px;display:block;margin:10px 10px;white-space: nowrap;">If the search content is not found, submit the demand feedback</a>'
+						empty: window.__PANEL_OFFLINE_MODE ? '' : '<a class="btlink"  onClick="javascript:bt.openFeedback({title:\'aaPanel demand feedback collection\',placeholder:\'<span>If you encounter any problems or imperfect functions during use, please describe <br> your problems or needs to us in detail, we will try our best to solve or improve for <br> you</span>\',recover:\'We pay special attention to your requirements feedback, and we conduct regular weekly requirements reviews. I hope I can help you better\',key:993,proType:2});" style="margin-left: 10px;display:block;margin:10px 10px;white-space: nowrap;">If the search content is not found, submit the demand feedback</a>'
         })
 				// 需求反馈
-				if(data.length == 0){
+				if(!window.__PANEL_OFFLINE_MODE && data.length == 0){
 					$('.feedback-btn').remove();
 			$('.soft-filter-box .soft-search').after('<span style="display:inline-block; margin-left:10px;margin-top:8px;vertical-align: bottom;" class="feedback-btn"><span class="flex" style="align-items: center;margin-right:16px;width:100px;"><i class="icon-demand"></i><a class="btlink" onClick="javascript:bt.openFeedback({title:\'aaPanel demand feedback collection\',placeholder:\'<span>If you encounter any problems or imperfect functions during use, please describe <br> your problems or needs to us in detail, we will try our best to solve or improve for <br> you</span>\',recover:\'We pay special attention to your requirements feedback, and we conduct regular weekly requirements reviews. I hope I can help you better\',key:993,proType:2});" style="margin-left: 10px;">Feedback</a></span></span>');
 			

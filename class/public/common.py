@@ -4311,7 +4311,8 @@ def get_menus():
         del (hide_menu)
         del (show_menu)
     menus = sorted(data, key=lambda x: x['sort'])
-    return filter_removed_menus(menus)
+    menus = filter_removed_menus(menus)
+    return filter_conditional_menus(menus)
 
 
 def get_menus_for_session_router() -> list:
@@ -4332,9 +4333,9 @@ def get_menus_for_session_router() -> list:
                 'sort': x.get('sort'),
             } for x in menu_list.get('message', []) if x.get('show', False) is True
         ]
-        return filter_removed_menus(result)
+        return filter_conditional_menus(filter_removed_menus(result))
     else:
-        return get_menus()
+        return filter_conditional_menus(filter_removed_menus(get_menus()))
 
 
 def _decrypt(data: str) -> str:
@@ -9274,16 +9275,75 @@ def apply_offline_soft_list(plugin_list_data):
     plugin_list_data['ltd'] = 0
     for key in ('list', 'data', 'msg'):
         items = plugin_list_data.get(key)
+        if isinstance(items, dict) and isinstance(items.get('data'), list):
+            items['data'] = filter_offline_soft_items(items['data'])
+            continue
         if not isinstance(items, list):
             continue
-        for item in items:
-            if isinstance(item, dict):
-                if item.get('endtime', -1) < 0:
-                    item['endtime'] = 0
-                item['pid'] = 0
-                if 'price' in item:
-                    item['price'] = '0'
+        plugin_list_data[key] = filter_offline_soft_items(items)
     return plugin_list_data
+
+
+def filter_offline_soft_items(items):
+    """Drop uninstalled paid/cloud-only plugins; strip price/license fields."""
+    if not is_offline_mode() or not isinstance(items, list):
+        return items
+    filtered = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        if _is_offline_uninstallable_plugin(item):
+            continue
+        try:
+            if int(item.get('endtime', 0)) < 0:
+                item['endtime'] = 0
+        except:
+            pass
+        item['pid'] = 0
+        item['price'] = 0
+        if 'fee' in item:
+            item['fee'] = 0
+        filtered.append(item)
+    return filtered
+
+
+def _is_offline_uninstallable_plugin(item):
+    """True when a plugin cannot be installed offline (paid / cloud ZIP only)."""
+    if item.get('setup'):
+        return False
+    try:
+        if int(item.get('endtime', 0)) < 0:
+            return True
+    except:
+        pass
+    try:
+        price = item.get('price', 0)
+        if price not in (None, '', 0, '0') and float(price) > 0:
+            return True
+    except:
+        pass
+    vers = item.get('versions')
+    if isinstance(vers, list) and vers and isinstance(vers[0], dict) and 'download' in vers[0]:
+        return True
+    return False
+
+
+def filter_conditional_menus(menu_list):
+    """Hide Docker/Mail menus when their plugin is not installed."""
+    if not menu_list:
+        return menu_list
+    checks = {
+        'memuDocker': '/www/server/panel/plugin/docker',
+        'memu_mailsys': '/www/server/panel/plugin/mail_sys',
+    }
+    result = []
+    for m in menu_list:
+        mid = m.get('id')
+        path = checks.get(mid)
+        if path and not os.path.exists(path):
+            continue
+        result.append(m)
+    return result
 
 
 REMOVED_MENU_IDS = frozenset([
@@ -9291,6 +9351,7 @@ REMOVED_MENU_IDS = frozenset([
     'memu_btwaf',
     'memuDomains',
     'memuAccount',
+    'memuNode',
 ])
 
 REMOVED_PANEL_PATH_PREFIXES = (
@@ -9300,6 +9361,7 @@ REMOVED_PANEL_PATH_PREFIXES = (
     '/ssl_domain',
     '/whm',
     '/bind',
+    '/node',
 )
 
 REMOVED_PANEL_API_PREFIXES = (

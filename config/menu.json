@@ -63,13 +63,6 @@
     "sort": 10
   },
   {
-    "title": "Node",
-    "href": "/node",
-    "class": "menu_node",
-    "id": "memuNode",
-    "sort": 11
-  },
-  {
     "title": "Logs",
     "href": "/logs",
     "class": "menu_logs",

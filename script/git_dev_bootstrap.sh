@@ -320,4 +320,16 @@ setup_service
 /etc/init.d/bt stop >/dev/null 2>&1 || true
 /etc/init.d/bt start
 
+install_default_stack() {
+  if [ "${INSTALL_STACK:-1}" != "1" ]; then
+    echo "==> Skip default stack (INSTALL_STACK=0)"
+    return 0
+  fi
+  if [ -f "$PANEL/script/install_offline_stack.sh" ]; then
+    echo "==> Default stack: nginx, mysql, php, pure-ftpd, phpmyadmin, nvm/node"
+    bash "$PANEL/script/install_offline_stack.sh" || echo "WARN: stack install had errors — see /tmp/offline_stack_install.log"
+  fi
+}
+install_default_stack
+
 open_firewall_hint

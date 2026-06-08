@@ -17,10 +17,40 @@ body.panel-offline-mode .showprofun,
 body.panel-offline-mode .alert-ltd-success,
 body.panel-offline-mode .thumbnail-title-button-new.daily-product-buy,
 body.panel-offline-mode a[href*='aapanel.com'],
-body.panel-offline-mode a[href*='bt.cn'] {
+body.panel-offline-mode a[href*='bt.cn'],
+body.panel-offline-mode .feedback-btn,
+body.panel-offline-mode .icon-demand,
+body.panel-offline-mode .toolbar-right .feedback,
+body.panel-offline-mode [data-offline-hide='1'] {
 	display: none !important;
 	visibility: hidden !important;
 	pointer-events: none !important;
+}
+
+/* Auth badge: version / Expire on / Renewal */
+body.panel-offline-mode .panel-auth-badge,
+body.panel-offline-mode .header-auth-info {
+	display: none !important;
+}
+
+/* App Store: hide Price / Expire date column */
+body.panel-offline-mode .soft-price-col,
+body.panel-offline-mode th.soft-expire-col,
+body.panel-offline-mode td.soft-expire-col {
+	display: none !important;
+}
+
+/* App Store: keep native Import plugins upload bar visible */
+body.panel-offline-mode .appStore-third-tips,
+body.panel-offline-mode .appStore-third-tips .n-upload,
+body.panel-offline-mode .appStore-third-tips .n-upload .n-button {
+	display: block !important;
+	visibility: visible !important;
+	pointer-events: auto !important;
+}
+
+body.panel-offline-mode .appStore-third-tips .n-upload {
+	display: inline-block !important;
 }
 
 /* Account / update / license banners on Settings & Account pages */

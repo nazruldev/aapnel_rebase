@@ -78,6 +78,8 @@ class ftplog:
         return file_name_list
 
     def __check_auth(self):
+        if public.is_offline_mode():
+            return True
         from plugin_auth_v2 import Plugin as Plugin
         plugin_obj = Plugin(False)
         plugin_list = plugin_obj.get_plugin_list()

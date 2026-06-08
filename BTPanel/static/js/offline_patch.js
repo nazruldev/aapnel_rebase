@@ -38,6 +38,8 @@
 			}
 		}
 
+		bt.openFeedback = noop;
+
 		if (typeof index !== 'undefined') {
 			index.check_update = noop;
 			index.to_update = noop;
@@ -58,12 +60,12 @@
 	}
 
 	var UPGRADE_RE =
-		/upgrade\s*now|renew\s*now|renewal|buy\s*now|buy\s*license|upgrade\s*to\s*pro|bind\s*account|license|purchase|aapanel\.com|立即升级|立即续费|升级专业版/i;
+		/upgrade\s*now|renew\s*now|renewal|buy\s*now|buy\s*license|upgrade\s*to\s*pro|bind\s*account|license|purchase|aapanel\.com|expire on|feedback|立即升级|立即续费|升级专业版/i;
 
 	function stripCommercialUi() {
 		if (typeof $ === 'undefined') return;
 		$(
-			'#updata_pro_info, .product-buy, .authState, .bind-user, .daily-product-buy, .openLtd, #is_ltd, .btpro-free, .btpro-gray, .updata_pro, .showprofun, .alert-ltd-success'
+			'#updata_pro_info, .product-buy, .authState, .bind-user, .daily-product-buy, .openLtd, #is_ltd, .btpro-free, .btpro-gray, .updata_pro, .showprofun, .alert-ltd-success, .feedback-btn, .toolbar-right .feedback, .icon-demand'
 		).remove();
 
 		$('button, a, .btn, .btlink').each(function () {
