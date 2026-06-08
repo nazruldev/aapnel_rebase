@@ -87,13 +87,20 @@ body.panel-offline-mode .pay-modal {
 /* Keep card body visible — commercial strip must not collapse n-card content */
 body.panel-offline-mode .n-card__content,
 body.panel-offline-mode .n-card-content,
+body.panel-offline-mode .n-layout,
 body.panel-offline-mode .n-layout-content,
 body.panel-offline-mode .n-layout-scroll-container,
 body.panel-offline-mode .n-scrollbar-content,
-body.panel-offline-mode .main-content {
+body.panel-offline-mode .main-content,
+body.panel-offline-mode #app .n-layout-content {
 	display: block !important;
 	visibility: visible !important;
 	min-height: 1px;
+	opacity: 1 !important;
+}
+
+body.panel-offline-mode [data-offline-hide='1'] {
+	display: none !important;
 }
 
 /* Install / plugin dialogs must stay visible during setup */

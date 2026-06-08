@@ -594,6 +594,32 @@ class panelPlugin:
                 pass
         return normalized
 
+    def _normalize_soft_info(self, info, name=None):
+        if not isinstance(info, dict):
+            return {}
+        name = info.get('name') or name
+        if name:
+            info['name'] = name
+        info.setdefault('install_checks', '{}/{}'.format(self.__plugin_path, name))
+        info.setdefault('checks', info.get('install_checks'))
+        info.setdefault('version_coexist', 0)
+        info.setdefault('title', name or '')
+        info.setdefault('ps', info.get('ps') or info.get('title', name or ''))
+        info.setdefault('id', info.get('pid', 3))
+        info.setdefault('pid', info.get('id', 3))
+        vers = info.get('versions')
+        if isinstance(vers, str):
+            parts = str(vers).split('.')
+            info['versions'] = [{
+                'm_version': parts[0] if parts else '1',
+                'version': parts[1] if len(parts) > 1 else '0',
+            }]
+        elif not isinstance(vers, list) or not vers:
+            info['versions'] = [{'m_version': '1', 'version': '0'}]
+        elif not isinstance(vers[0], dict):
+            info['versions'] = [{'m_version': '1', 'version': '0'}]
+        return info
+
     def _post_plugin_install(self, plugin_name):
         if not plugin_name:
             return
@@ -616,7 +642,7 @@ class panelPlugin:
         if not os.path.exists(info_file):
             return
         try:
-            info = json.loads(public.readFile(info_file))
+            info = self._normalize_soft_info(json.loads(public.readFile(info_file)), plugin_name)
         except:
             return
         list_path = self.__panel_path + '/data/list.json'
@@ -638,20 +664,14 @@ class panelPlugin:
                 updated = True
                 break
         if not updated:
-            items.append({
-                'sort': int(info.get('sort', 99)),
-                'ps': info.get('ps', info.get('title', plugin_name)),
-                'shell': info.get('shell', plugin_name + '.sh'),
-                'name': plugin_name,
-                'title': info.get('title', plugin_name),
-                'default': bool(info.get('default', False)),
-                'display': 1,
-                'author': info.get('author', 'aaPanel'),
-                'home': info.get('home', 'https://www.aapanel.com'),
-                'type': info.get('type', 'other'),
-                'pid': info.get('id', info.get('pid', 9000)),
-                'id': info.get('id', 3),
-            })
+            entry = self._normalize_soft_info(dict(info), plugin_name)
+            entry['display'] = 1
+            entry.setdefault('shell', plugin_name + '.sh')
+            entry.setdefault('default', False)
+            entry.setdefault('author', 'aaPanel')
+            entry.setdefault('home', 'https://www.aapanel.com')
+            entry.setdefault('type', 'other')
+            items.append(entry)
         public.writeFile(list_path, json.dumps(items, ensure_ascii=False))
 
     def _normalize_install_result(self, result):
@@ -1490,7 +1510,7 @@ class panelPlugin:
         softInfo['status'] = False
         softInfo['task'] = self.check_setup_task(softInfo['name']) if "name" in softInfo else "1"
         softInfo['is_beta'] = self.is_beta_plugin(softInfo['name']) if "name" in softInfo else False
-        softInfo['ps'] = self.get_soft_ps(softInfo['ps'])
+        softInfo['ps'] = self.get_soft_ps(softInfo.get('ps', softInfo.get('title', '')))
 
         key_info = ''
         if 'keys' in softInfo:
@@ -1505,7 +1525,9 @@ class panelPlugin:
             softInfo['shell'] = softInfo['version']
             softInfo['version'] = self.get_version_info(softInfo)
             softInfo['status'] = True
-            softInfo['versions'] = self.tips_version(softInfo['versions'],softInfo['version'])
+            softInfo['versions'] = self.tips_version(
+                softInfo.get('versions') if isinstance(softInfo.get('versions'), list) else [{'m_version': '1', 'version': '0'}],
+                softInfo['version'])
             softInfo['admin'] = os.path.exists('/www/server/panel/plugin/' + softInfo['name'])
 
             if 's_version' in softInfo and len(softInfo['s_version']) > 3:
@@ -1518,7 +1540,7 @@ class panelPlugin:
                     if softInfo['status']: break
         else:
             softInfo['version'] = ""
-        if softInfo['version_coexist'] == 1:
+        if softInfo.get('version_coexist', 0) == 1:
             if softInfo['id'] != 10000:
                 self.get_icon(softInfo['name'].split('-')[0])
         else:
@@ -1655,9 +1677,15 @@ class panelPlugin:
             return None
         if not isinstance(info, dict) or info.get('name') != sName:
             return None
+        info = self._normalize_soft_info(info, sName)
         info.setdefault('setup', True)
-        info.setdefault('install_checks', '{}/{}'.format(self.__plugin_path, sName))
-        return self.check_status(info)
+        try:
+            return self.check_status(info)
+        except:
+            info['setup'] = os.path.isdir('{}/{}'.format(self.__plugin_path, sName))
+            info.setdefault('status', info['setup'])
+            info.setdefault('version', '')
+            return info
 
     def _soft_find_from_raw_catalog(self, sName):
         items = []
@@ -2098,6 +2126,14 @@ class panelPlugin:
             data = self.GetList(None)
             for d in data:
                 if d['name'] == name: return d
+            info_path = '{}/{}/info.json'.format(self.__install_path, name)
+            if os.path.exists(info_path):
+                try:
+                    info = self._normalize_soft_info(json.loads(public.readFile(info_path)), name)
+                    info['display'] = info.get('display', 1)
+                    return info
+                except:
+                    pass
             return None
         except:
             return None
@@ -2793,6 +2829,10 @@ class panelPlugin:
     def getPluginInfo(self,get):
         try:
             pluginInfo = self.GetFind(get.name)
+            if not pluginInfo:
+                pluginInfo = self._soft_find_from_local_plugin(get.name)
+            if not pluginInfo:
+                return False
             apacheVersion = ""
             try:
                 apavFile = '/www/server/apache/version.pl'
@@ -2806,7 +2846,10 @@ class panelPlugin:
                 elif apacheVersion == '2.4':
                     pluginInfo['versions'] = '5.3,5.4,5.5,5.6,7.0,7.1,7.2,7.3,7.4'
 
-            pluginInfo['versions'] = self.checksSetup(pluginInfo['name'],pluginInfo['checks'],pluginInfo['versions'])
+            pluginInfo['versions'] = self.checksSetup(
+                pluginInfo['name'],
+                pluginInfo.get('checks', pluginInfo.get('install_checks', '')),
+                pluginInfo.get('versions', ''))
             if get.name == 'php':
                 pluginInfo['phpSort'] = public.readFile('/www/server/php/sort.pl')
             return pluginInfo
@@ -2849,6 +2892,11 @@ class panelPlugin:
             if get.name in __import__('builtin_plugins').WHITELIST_SOFT_NAMES:
                 __import__('builtin_plugins').set_ui_enabled(get.name, int(get.status) != 0)
             self.SetField(get.name, 'display', int(get.status))
+        if int(get.status) != 0:
+            try:
+                self._post_plugin_install(get.name)
+            except:
+                pass
         return public.return_message(0, 0, public.lang("Setup successfully!"))
 
     def get_builtin_plugins(self, get=None):
