@@ -9296,8 +9296,8 @@ def filter_offline_soft_items(items):
     for item in items:
         if not isinstance(item, dict):
             continue
-        if public._is_offline_uninstallable_plugin(item):
-            if not public.has_local_plugin_mirror(item.get('name')):
+        if is_offline_uninstallable_plugin(item):
+            if not has_local_plugin_mirror(item.get('name')):
                 try:
                     import builtin_plugins as bp
                     if item.get('name') not in bp.WHITELIST_SOFT_NAMES:
@@ -9317,7 +9317,7 @@ def filter_offline_soft_items(items):
     return filtered
 
 
-def _is_offline_uninstallable_plugin(item):
+def is_offline_uninstallable_plugin(item):
     """True when a plugin cannot be installed offline (paid / cloud ZIP only)."""
     if item.get('setup'):
         return False

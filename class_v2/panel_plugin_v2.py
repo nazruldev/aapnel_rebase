@@ -604,7 +604,7 @@ class panelPlugin:
                     return mirror.install_from_mirror(pluginInfo.get('name'))
             except:
                 pass
-            if public._is_offline_uninstallable_plugin(pluginInfo):
+            if public.is_offline_uninstallable_plugin(pluginInfo):
                 return public.return_msg_gettext(
                     False,
                     public.lang("Offline mode: import compatible plugins via ZIP in App Store"))

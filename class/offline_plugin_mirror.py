@@ -76,7 +76,7 @@ def get_mirror_zip(name):
 def is_mirror_plugin(item):
     if not isinstance(item, dict):
         return False
-    if public._is_offline_uninstallable_plugin(item):
+    if public.is_offline_uninstallable_plugin(item):
         return False
     checks = str(item.get('install_checks') or '')
     if '/www/server/panel/plugin/' in checks:
