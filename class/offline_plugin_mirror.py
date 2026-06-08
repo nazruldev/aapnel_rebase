@@ -139,6 +139,142 @@ def _plugin_version_key(item):
     return str(item.get('version', ''))
 
 
+def _plugin_version_candidates(item):
+    """Version strings to try against download_plugin API."""
+    candidates = []
+    primary = _plugin_version_key(item)
+    if primary and primary != '.':
+        candidates.append(primary)
+    vers = item.get('versions') or []
+    v0 = vers[0] if vers and isinstance(vers[0], dict) else {}
+    fallback = '{}.{}'.format(v0.get('m_version', '1'), v0.get('version', '0'))
+    if fallback and fallback not in candidates and fallback != '.':
+        candidates.append(fallback)
+    if v0.get('version'):
+        sv = str(v0['version'])
+        if sv not in candidates:
+            candidates.append(sv)
+    for alias in ('tls', 'beta'):
+        if alias not in candidates:
+            candidates.append(alias)
+    return candidates
+
+
+def _get_cloud_auth_pdata():
+    """Require bound aaPanel account (data/userInfo.json with JWT token)."""
+    try:
+        import panelAuth
+        auth = panelAuth.panelAuth().create_serverid(None)
+    except Exception as ex:
+        raise public.PanelError(
+            'Please bind aaPanel account first (Panel → Settings → aaPanel account). ({})'.format(ex))
+
+    if not isinstance(auth, dict):
+        raise public.PanelError('Please bind aaPanel account first (Panel → Settings → aaPanel account).')
+    if auth.get('status') is False:
+        msg = auth.get('msg') or auth.get('message') or 'Please bind aaPanel account first.'
+        raise public.PanelError(str(msg))
+    if not auth.get('token'):
+        raise public.PanelError(
+            'aaPanel account token missing. Log in via Panel → Settings → aaPanel account, then retry sync.')
+    return dict(auth)
+
+
+def _parse_download_http_error(resp):
+    try:
+        body = resp.json()
+        if isinstance(body, dict):
+            for key in ('msg', 'message', 'res', 'error'):
+                if body.get(key):
+                    return str(body[key])
+    except:
+        pass
+    text = (resp.text or '').strip()
+    if text:
+        return text[:400]
+    return 'Download failed (HTTP {})'.format(resp.status_code)
+
+
+def _download_plugin_from_cloud(name, version):
+    """Download plugin ZIP via aaPanel download_plugin API."""
+    import json
+    import requests
+
+    panel_path = public.get_panel_path()
+    tmp_path = '{}/temp'.format(panel_path)
+    if not os.path.exists(tmp_path):
+        os.makedirs(tmp_path, mode=0o755)
+    filename = '{}/{}.zip'.format(tmp_path, name)
+    if os.path.isfile(filename):
+        os.remove(filename)
+
+    pdata = _get_cloud_auth_pdata()
+    extra = public.get_user_info() or {}
+    if isinstance(extra, dict):
+        for key, val in extra.items():
+            if key not in pdata and val is not None and not isinstance(val, (list, tuple, dict)):
+                pdata[key] = val
+    pdata['name'] = name
+    pdata['version'] = version
+    pdata['os'] = 'Linux'
+    pdata['environment_info'] = json.dumps(public.fetch_env_info(), ensure_ascii=False)
+
+    try:
+        headers = dict(public.get_requests_headers())
+    except:
+        headers = {'Content-type': 'application/x-www-form-urlencoded', 'User-Agent': 'BT-Panel'}
+    headers['authorization'] = 'bt {}'.format(pdata['token'])
+
+    urls = [
+        '{}/api/panel/download_plugin'.format(public.sync_plugin_OfficialApiBase()),
+        '{}/api/panel/download_plugin'.format(public.OfficialApiBase()),
+    ]
+
+    last_err = None
+    for url in urls:
+        try:
+            resp = requests.post(url, pdata, headers=headers, timeout=(60, 1800), stream=True, verify=False)
+        except Exception as ex:
+            last_err = public.PanelError(str(ex))
+            continue
+
+        if not resp.ok:
+            last_err = public.PanelError(_parse_download_http_error(resp))
+            continue
+
+        try:
+            headers_total_size = int(resp.headers.get('File-size', 0))
+        except:
+            headers_total_size = 0
+
+        if headers_total_size <= 0:
+            last_err = public.PanelError(_parse_download_http_error(resp))
+            continue
+
+        with open(filename, 'wb') as out:
+            for chunk in resp.iter_content(chunk_size=256 * 1024):
+                if chunk:
+                    out.write(chunk)
+
+        content_md5 = resp.headers.get('Content-md5')
+        if content_md5 and public.FileMd5(filename) != content_md5:
+            os.remove(filename)
+            last_err = public.PanelError('Verify package checksum failed.')
+            continue
+
+        if not os.path.isfile(filename) or os.path.getsize(filename) < 100:
+            if os.path.isfile(filename):
+                os.remove(filename)
+            last_err = public.PanelError('Empty package for {}'.format(name))
+            continue
+
+        return filename
+
+    if last_err:
+        raise last_err
+    raise public.PanelError('Download failed for {}'.format(name))
+
+
 def list_catalog(refresh=False):
     if refresh or not load_manifest().get('plugins'):
         try:
@@ -175,89 +311,6 @@ def list_catalog(refresh=False):
     return {'ok': True, 'items': catalog, 'total': len(catalog), 'mirrored': sum(1 for x in catalog if x['mirrored'])}
 
 
-def _download_plugin_from_cloud(name, version):
-    """Download plugin ZIP via aaPanel download_plugin API."""
-    import json
-    import requests
-
-    panel_path = public.get_panel_path()
-    tmp_path = '{}/temp'.format(panel_path)
-    if not os.path.exists(tmp_path):
-        os.makedirs(tmp_path, mode=0o755)
-    filename = '{}/{}.zip'.format(tmp_path, name)
-    if os.path.isfile(filename):
-        os.remove(filename)
-
-    url = '{}/api/panel/download_plugin'.format(public.sync_plugin_OfficialApiBase())
-    pdata = public.get_user_info() or {}
-    if not isinstance(pdata, dict):
-        pdata = {}
-    try:
-        import panelAuth
-        auth = panelAuth.panelAuth().create_serverid(None)
-        if isinstance(auth, dict) and auth.get('status') is None:
-            for key in ('server_id', 'token', 'uid', 'username'):
-                if auth.get(key) and not pdata.get(key):
-                    pdata[key] = auth[key]
-    except:
-        pass
-    pdata['name'] = name
-    pdata['version'] = version
-    pdata['os'] = 'Linux'
-    pdata['environment_info'] = json.dumps(public.fetch_env_info(), ensure_ascii=False)
-
-    try:
-        headers = public.get_requests_headers()
-    except:
-        headers = {'user-agent': 'aaPanel/1.0'}
-
-    try:
-        resp = requests.post(url, pdata, headers=headers, timeout=(60, 1800), stream=True, verify=False)
-    except Exception as ex:
-        raise public.PanelError(str(ex))
-
-    if not resp.ok:
-        raise public.PanelError('Download failed (HTTP {})'.format(resp.status_code))
-
-    try:
-        headers_total_size = int(resp.headers.get('File-size', 0))
-    except:
-        headers_total_size = 0
-
-    if headers_total_size <= 0:
-        try:
-            err = resp.json()
-            if isinstance(err, dict):
-                msg = err.get('msg') or err.get('message')
-                if msg:
-                    raise public.PanelError(str(msg))
-        except public.PanelError:
-            raise
-        except:
-            pass
-        text = (resp.text or '')[:500]
-        if '<html>' in text.lower():
-            msg = public.error_conn_cloud(resp.text) if hasattr(public, 'error_conn_cloud') else text
-            raise public.PanelError(msg)
-        raise public.PanelError(text or 'Download failed for {}'.format(name))
-
-    with open(filename, 'wb') as out:
-        for chunk in resp.iter_content(chunk_size=256 * 1024):
-            if chunk:
-                out.write(chunk)
-
-    content_md5 = resp.headers.get('Content-md5')
-    if content_md5 and public.FileMd5(filename) != content_md5:
-        os.remove(filename)
-        raise public.PanelError('Verify package checksum failed.')
-
-    if not os.path.isfile(filename) or os.path.getsize(filename) < 100:
-        if os.path.isfile(filename):
-            os.remove(filename)
-        raise public.PanelError('Empty package for {}'.format(name))
-    return filename
-
-
 def _download_plugin_zip(item):
     name = item['name']
     vers = item.get('versions') or []
@@ -269,26 +322,29 @@ def _download_plugin_zip(item):
     tmp = '{}/{}.download'.format(zip_dir, name)
 
     if 'download' in v0 and v0.get('download'):
-        token = None
-        try:
-            import panelAuth
-            auth = panelAuth.panelAuth().create_serverid(None)
-            if isinstance(auth, dict):
-                token = auth.get('token')
-        except:
-            pass
+        auth = _get_cloud_auth_pdata()
+        token = auth.get('token') or ''
         url = '{}/api/plugin/download?filename={}&token={}'.format(
-            public.OfficialApiBase(), v0['download'], token or '')
+            public.OfficialApiBase(), v0['download'], token)
         public.downloadFile(url, tmp)
         if v0.get('md5') and os.path.exists(tmp):
             if public.FileMd5(tmp) != v0['md5']:
                 public.ExecShell('rm -f {}'.format(tmp))
                 raise public.PanelError('MD5 mismatch for {}'.format(name))
     else:
-        version = _plugin_version_key(item)
-        if not version or version == '.':
-            version = '{}.{}'.format(v0.get('m_version', '1'), v0.get('version', '0'))
-        src = _download_plugin_from_cloud(name, version)
+        last_ex = None
+        src = None
+        for version in _plugin_version_candidates(item):
+            try:
+                src = _download_plugin_from_cloud(name, version)
+                break
+            except public.PanelError as ex:
+                last_ex = ex
+                err = str(ex).lower()
+                if 'login' in err or 'token' in err or 'account' in err:
+                    raise
+        if not src:
+            raise last_ex or public.PanelError('Download failed for {}'.format(name))
         import shutil
         shutil.copyfile(src, tmp)
 
