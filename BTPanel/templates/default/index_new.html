@@ -13,42 +13,28 @@
 		<!-- naive-ui 的样式会出现在这里 -->
 		<meta name="naive-ui-style" />
 		<title>{{ session['title'] }}</title>
-		<script type="application/json" id="panel-page-data">{{ {
-			'offline_mode': data.get('offline_mode', False),
-			'builtin_plugins': data.get('builtin_plugins', {}),
-			'sites_path': session.get('config', {}).get('sites_path', ''),
-			'webserver': session.get('webserver', ''),
-			'distribution': session.get('config', {}).get('distribution', ''),
-			'panelVersion': session.get('version', ''),
-			'vite_menus': g.menus | default([]) | string,
-			'isSetup': data.get('isSetup', False),
-			'public_key': data.get('public_key', ''),
-			'translations': data.get('translations', ''),
-			'vite_public_panel_theme': g.panel_theme | default({}) | string,
-			'sessionInfo': {
+		<script>
+			window.__PANEL_OFFLINE_MODE = {{ data.get('offline_mode', False) | tojson }};
+			window.__BUILTIN_PLUGINS = {{ data.get('builtin_plugins', {}) | tojson }};
+			window.sites_path = {{ session.get('config', {}).get('sites_path', '') | tojson }};
+			window.webserver = {{ session.get('webserver', '') | tojson }};
+			window.distribution = {{ session.get('config', {}).get('distribution', '') | tojson }};
+			window.panelVersion = {{ session.get('version', '') | tojson }};
+			window.vite_menus = '{{ g.menus | default([]) | string | e }}';
+			window.isSetup = {{ data.get('isSetup', False) | tojson }};
+			window.public_key = {{ data.get('public_key', '') | tojson }};
+			window.translations = {{ data.get('translations', '') | tojson }};
+			window.vite_public_panel_theme = '{{ g.panel_theme | default({}) | string | e }}';
+
+			var sessionInfo = {{ {
 				'title': session.get('title', ''),
 				'username': session.get('username', ''),
 				'statusCode': data.get('status_code', '')
-			}
-		} | tojson }}</script>
-		<script>
-			var pageData = JSON.parse(document.getElementById('panel-page-data').textContent);
-			window.__PANEL_OFFLINE_MODE = !!pageData.offline_mode;
-			window.__BUILTIN_PLUGINS = pageData.builtin_plugins || {};
-			window.sites_path = pageData.sites_path || '';
-			window.webserver = pageData.webserver || '';
-			window.distribution = pageData.distribution || '';
-			window.panelVersion = pageData.panelVersion || '';
-			window.vite_menus = pageData.vite_menus || '[]';
-			window.isSetup = !!pageData.isSetup;
-			window.public_key = pageData.public_key || '';
-			window.translations = pageData.translations || '';
-			window.vite_public_panel_theme = pageData.vite_public_panel_theme || '{}';
-			var sessionInfo = pageData.sessionInfo || {};
+			} | tojson }};
 		</script>
 		{% if data.get('offline_mode') %}
-		<link rel="stylesheet" href="/static/css/offline_commercial.css?v={{ session['version'] }}-5" />
-		<script src="/static/js/offline_patch_vite.js?v={{ session['version'] }}-5"></script>
+		<link rel="stylesheet" href="/static/css/offline_commercial.css?v={{ session['version'] }}-6" />
+		<script src="/static/js/offline_patch_vite.js?v={{ session['version'] }}-6"></script>
 		{% endif %}
 		<script type="module" crossorigin src="/static/vite/js/index-DV9DrNIN.js?v=1778752098997"></script>
 		<link rel="modulepreload" crossorigin href="/static/vite/js/prismjs-CP0O0FCs.js?v=1778752098997">
