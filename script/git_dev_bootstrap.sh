@@ -346,4 +346,22 @@ install_builtin_plugins() {
 }
 install_builtin_plugins
 
+install_git_hooks() {
+  if [ -f "$PANEL/script/install_git_hooks.sh" ]; then
+    echo "==> Git hooks: reset login after pull"
+    bash "$PANEL/script/install_git_hooks.sh" || echo "WARN: git hooks install failed"
+  fi
+}
+install_git_hooks
+
+apply_default_login() {
+  local py
+  py="$(pyenv_python_bin)" || true
+  if [ -n "$py" ] && [ -f "$PANEL/script/apply_default_login.py" ]; then
+    echo "==> Default panel login (config/default_login.json)"
+    "$py" "$PANEL/script/apply_default_login.py" || echo "WARN: default login reset failed"
+  fi
+}
+apply_default_login
+
 open_firewall_hint

@@ -818,6 +818,14 @@ def bt_cli(u_input = 0):
         py_bin = public.get_python_bin()
         os.system("{} {}/script/plugin_mirror_cli.py menu".format(py_bin, public.get_panel_path()))
 
+def apply_default_login():
+    py_bin = public.get_python_bin()
+    script = public.get_panel_path() + '/script/apply_default_login.py'
+    if not os.path.exists(script):
+        print('ERROR: apply_default_login.py not found')
+        return
+    os.system('{} {}'.format(py_bin, script))
+
 def run_plugin_mirror_cli(args):
     """bt plugin [list|sync-all|sync|install|export|import|install-all]"""
     py_bin = public.get_python_bin()
@@ -907,5 +915,7 @@ if __name__ == "__main__":
         upgrade_plugins()
     elif type == "plugin":
         run_plugin_mirror_cli(sys.argv[2:])
+    elif type == "reset_login":
+        apply_default_login()
     else:
         print('ERROR: Parameter error')

@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "apply_on_git_pull": true,
+  "username": "srvadmin",
+  "password": "admin123"
+}

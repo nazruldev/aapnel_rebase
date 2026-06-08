@@ -349,6 +349,9 @@ case "$1" in
         'plugin')
         		$pythonV $panel_path/tools.py plugin "${@:2}"
         		;;
+        'reset_login')
+        		$pythonV $panel_path/tools.py reset_login
+        		;;
         'default')
                 port=$(cat $panel_path/data/port.pl)
                 password=$(cat $panel_path/default.pl)

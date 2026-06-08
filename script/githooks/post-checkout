@@ -1,0 +1,31 @@
+#!/bin/bash
+# Run after git pull / reset --hard: reset panel login from config/default_login.json
+# Install: bash /www/server/panel/script/install_git_hooks.sh
+
+prev_head="${1:-}"
+new_head="${2:-}"
+
+# Skip when HEAD did not change
+if [ -n "$prev_head" ] && [ "$prev_head" = "$new_head" ]; then
+  exit 0
+fi
+
+PANEL="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+CFG="$PANEL/config/default_login.json"
+[ -f "$CFG" ] || exit 0
+
+PY="$PANEL/pyenv/bin/python3"
+[ -x "$PY" ] || PY="python3"
+
+"$PY" - <<'PY' "$CFG" 2>/dev/null || exit 0
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    c = json.load(f)
+if not c.get("enabled", True):
+    sys.exit(1)
+if not c.get("apply_on_git_pull", True):
+    sys.exit(1)
+PY
+
+"$PY" "$PANEL/script/apply_default_login.py" -q >>/tmp/panel_login_reset.log 2>&1 || true
+exit 0
