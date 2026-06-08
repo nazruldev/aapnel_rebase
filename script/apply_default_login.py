@@ -52,9 +52,16 @@ def apply_default_login(quiet=False):
 
     panel_path = public.get_panel_path()
     default_pl = '{}/default.pl'.format(panel_path)
+    user_pl = '{}/data/default_user.pl'.format(panel_path)
+    try:
+        public.ExecShell('chattr -i {} 2>/dev/null'.format(default_pl))
+    except Exception:
+        pass
     public.writeFile(default_pl, password)
+    public.writeFile(user_pl, username)
     try:
         os.chmod(default_pl, 0o600)
+        os.chmod(user_pl, 0o600)
     except Exception:
         pass
 
@@ -63,7 +70,47 @@ def apply_default_login(quiet=False):
     return 0
 
 
+def show_login_info():
+    """Print panel login for bt 14 / bt default — apply config first, never randomize."""
+    apply_default_login(quiet=True)
+    cfg = load_config() or {}
+    username = cfg.get('username') or 'srvadmin'
+    password = cfg.get('password') or 'admin123'
+
+    panel_path = public.get_panel_path()
+    user_pl = '{}/data/default_user.pl'.format(panel_path)
+    if os.path.isfile(user_pl):
+        try:
+            username = (public.readFile(user_pl) or username).strip() or username
+        except Exception:
+            pass
+
+    try:
+        import db
+        sql = db.Sql()
+        db_user = sql.table('users').where('id=?', (1,)).getField('username')
+        if db_user:
+            username = db_user
+    except Exception:
+        pass
+
+    default_pl = '{}/default.pl'.format(panel_path)
+    if os.path.isfile(default_pl):
+        try:
+            pl_pass = (public.readFile(default_pl) or '').strip()
+            if pl_pass and pl_pass != '********':
+                password = pl_pass
+        except Exception:
+            pass
+
+    print('username: {}'.format(username))
+    print('password: {}'.format(password))
+    return 0
+
+
 def main():
+    if '--show' in sys.argv or 'show' in sys.argv:
+        return show_login_info()
     quiet = '--quiet' in sys.argv or '-q' in sys.argv
     return apply_default_login(quiet=quiet)
 

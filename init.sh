@@ -352,9 +352,11 @@ case "$1" in
         'reset_login')
         		$pythonV $panel_path/tools.py reset_login
         		;;
+        'show_login')
+        		$pythonV $panel_path/tools.py show_login
+        		;;
         'default')
                 port=$(cat $panel_path/data/port.pl)
-                password=$(cat $panel_path/default.pl)
                 if [ -f $panel_path/data/domain.conf ];then
                 	address=$(cat $panel_path/data/domain.conf)
                 fi
@@ -425,8 +427,7 @@ case "$1" in
                     echo  "aaPanel Internal Address:      ${pool}://${LOCAL_IP}:${port}${auth_path}"
                 fi
 
-                echo -e `$pythonV $panel_path/tools.py username`
-                echo -e "password: $password"
+                echo -e `$pythonV $panel_path/tools.py show_login`
                 echo -e "\033[33mWarning:\033[0m"
                 echo -e "\033[33mIf you cannot access the panel, \033[0m"
                 echo -e "\033[33mrelease the following port ($port|888|80|443|20|21) in the security group\033[0m"

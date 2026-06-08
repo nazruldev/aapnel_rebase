@@ -21,4 +21,7 @@ echo "==> reset panel login (config/default_login.json)"
 echo "==> restart panel"
 /etc/init.d/bt restart
 
-echo "==> Done. Check config/default_login.json for username/password."
+echo "==> reset panel login again (after restart)"
+"$PY" "$PANEL/script/apply_default_login.py"
+
+echo "==> Done. Login: bt 14  or  bt reset_login"

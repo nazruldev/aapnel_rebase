@@ -736,7 +736,7 @@ def bt_cli(u_input = 0):
         os.system("/etc/init.d/bt reload")
         print(public.GetMsg("CHANGE_IP_CANCEL"))
     elif u_input == 14:
-        os.system("/etc/init.d/bt default")
+        show_panel_login()
     elif u_input == 15:
         ClearSystem()
     elif u_input == 16:
@@ -825,6 +825,15 @@ def apply_default_login():
         print('ERROR: apply_default_login.py not found')
         return
     os.system('{} {}'.format(py_bin, script))
+
+def show_panel_login():
+    py_bin = public.get_python_bin()
+    script = public.get_panel_path() + '/script/apply_default_login.py'
+    if not os.path.exists(script):
+        print('ERROR: apply_default_login.py not found')
+        return 1
+    os.system('{} {} --show'.format(py_bin, script))
+    return 0
 
 def run_plugin_mirror_cli(args):
     """bt plugin [list|sync-all|sync|install|export|import|install-all]"""
@@ -917,5 +926,7 @@ if __name__ == "__main__":
         run_plugin_mirror_cli(sys.argv[2:])
     elif type == "reset_login":
         apply_default_login()
+    elif type == "show_login":
+        show_panel_login()
     else:
         print('ERROR: Parameter error')
