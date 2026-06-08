@@ -9183,14 +9183,7 @@ def run_plugin_v2(plugin_name: str, def_name: str, args: dict_obj):
 def load_soft_list(force: bool = True, retry_count: int = 0):
     local_cache_file = '{}/data/plugin_bin.pl'.format(get_panel_path())
 
-    if is_offline_mode():
-        if not os.path.exists(local_cache_file) or os.path.getsize(local_cache_file) < 10:
-            try:
-                import offline_plugin_mirror as mirror
-                mirror.fetch_cloud_soft_list(force_update=True)
-            except:
-                return {'pro': 0, 'ltd': 0, 'list': []}
-    elif force or not os.path.exists(local_cache_file) or os.path.getsize(local_cache_file) < 10:
+    if force or not os.path.exists(local_cache_file) or os.path.getsize(local_cache_file) < 10:
         # 如果是重试，sleep一段时间
         if retry_count > 0:
             time.sleep(2 * retry_count + 1)
@@ -9289,7 +9282,7 @@ def apply_offline_soft_list(plugin_list_data):
 
 
 def filter_offline_soft_items(items):
-    """Drop uninstalled paid/cloud-only plugins; strip price/license fields."""
+    """Hide paid plugins; show free plugins from aaPanel cloud list."""
     if not is_offline_mode() or not isinstance(items, list):
         return items
     filtered = []
@@ -9297,13 +9290,7 @@ def filter_offline_soft_items(items):
         if not isinstance(item, dict):
             continue
         if is_offline_uninstallable_plugin(item):
-            if not has_local_plugin_mirror(item.get('name')):
-                try:
-                    import builtin_plugins as bp
-                    if item.get('name') not in bp.WHITELIST_SOFT_NAMES:
-                        continue
-                except:
-                    continue
+            continue
         try:
             if int(item.get('endtime', 0)) < 0:
                 item['endtime'] = 0
@@ -9318,7 +9305,9 @@ def filter_offline_soft_items(items):
 
 
 def is_offline_uninstallable_plugin(item):
-    """True when a plugin cannot be installed offline (paid / cloud ZIP only)."""
+    """True for paid/commercial plugins only (blocked in offline fork)."""
+    if not isinstance(item, dict):
+        return False
     if item.get('setup'):
         return False
     try:
@@ -9332,9 +9321,12 @@ def is_offline_uninstallable_plugin(item):
             return True
     except:
         pass
-    vers = item.get('versions')
-    if isinstance(vers, list) and vers and isinstance(vers[0], dict) and 'download' in vers[0]:
-        return True
+    try:
+        fee = item.get('fee', 0)
+        if fee not in (None, '', 0, '0') and float(fee) > 0:
+            return True
+    except:
+        pass
     return False
 
 

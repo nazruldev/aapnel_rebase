@@ -13,7 +13,6 @@ PLUGINS = {
         'install_checks': '/www/server/panel/plugin/bt_agent',
         'auto_install': True,
         'default_enabled': True,
-        'prefer_local_only': True,
         'list_entry': {
             'sort': 3,
             'ps': 'AI Assistant — panel chat helper (built-in)',
@@ -125,24 +124,6 @@ def ensure_list_entry(name):
 def ensure_installed(name):
     if is_installed(name):
         return True
-    meta = PLUGINS.get(name, {})
-    try:
-        import offline_plugin_mirror as mirror
-        bundled = mirror.bundled_zip_path(name)
-        if bundled and not mirror.has_mirror(name):
-            mirror.register_local_zip(name, bundled, title=meta.get('title', name))
-        if mirror.has_mirror(name):
-            result = mirror.install_from_mirror(name)
-            if isinstance(result, dict) and result.get('status') is True:
-                return is_installed(name)
-        if not meta.get('prefer_local_only', False) and not mirror.has_mirror(name):
-            mirror.sync_plugins(names=[name])
-            if mirror.has_mirror(name):
-                result = mirror.install_from_mirror(name)
-                if isinstance(result, dict) and result.get('status') is True:
-                    return is_installed(name)
-    except:
-        pass
     try:
         import panel_plugin_v2
         plugin_obj = panel_plugin_v2.panelPlugin()

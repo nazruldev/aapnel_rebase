@@ -77,8 +77,18 @@ body.panel-offline-mode .pay-modal {
 
 /* Keep card body visible — commercial strip must not collapse n-card content */
 body.panel-offline-mode .n-card__content,
-body.panel-offline-mode .n-card-content {
+body.panel-offline-mode .n-card-content,
+body.panel-offline-mode .n-layout-content,
+body.panel-offline-mode .n-layout-scroll-container,
+body.panel-offline-mode .n-scrollbar-content,
+body.panel-offline-mode .main-content {
 	display: block !important;
 	visibility: visible !important;
 	min-height: 1px;
+}
+
+/* Install / plugin dialogs must stay visible during setup */
+body.panel-offline-mode .n-dialog__content,
+body.panel-offline-mode .n-modal-body {
+	visibility: visible !important;
 }

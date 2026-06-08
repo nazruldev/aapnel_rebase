@@ -554,6 +554,8 @@ class panelPlugin:
             return public.return_message(-1, 0, msg if isinstance(msg, str) else public.lang('failed to get soft info'))
         pluginInfo = pluginFind['message']
         get.pluginInfo = pluginInfo
+        if public.is_offline_mode() and public.is_offline_uninstallable_plugin(pluginInfo):
+            return public.return_message(-1, 0, public.lang("Paid plugins are not available. Only free plugins can be installed from aaPanel."))
         check_result = self.check_install_limit(get)
         if check_result and get.get('Skip', False) not in [True,'true']:  # 判断是否跳过排斥检查。仅用于多服务相关插件
             return check_result
@@ -577,39 +579,36 @@ class panelPlugin:
             result = self.install_async(pluginInfo,get)
         # public.print_log("hdfh222  {}".format(result))
         try:
-            # if 'status' in result:
-            #     if result['status']:
-            #         public.arequests('post','{}/api/setupCount/setupPlugin'.format(self.__official_url),data={"pid":pluginInfo['id'],'p_name':pluginInfo['name']},timeout=3)
             if result:
                 public.arequests('post', '{}/api/setupCount/setupPlugin'.format(self.__official_url),
                                  data={"pid": pluginInfo['id'], 'p_name': pluginInfo['name']}, timeout=3)
-            # get.force = 1
-            # self.get_cloud_list(get)
         except:
             pass
 
-        sts = 0
-        if isinstance(result, dict) and result.get('status', None):
-            sts = 0 if result['status'] else -1
-            result = result['msg']
+        return self._normalize_install_result(result)
 
-        return public.return_message(sts, 0,  result)
+    def _normalize_install_result(self, result):
+        """Map return_msg_gettext / return_message install results to API response."""
+        if not isinstance(result, dict):
+            return public.return_message(0, 0, result)
+        if 'status' not in result:
+            return public.return_message(0, 0, result)
+        st = result.get('status')
+        if st in (True, 0, '0'):
+            sts = 0
+        elif st in (False, -1, '-1'):
+            sts = -1
+        else:
+            sts = 0 if st else -1
+        msg = result.get('msg')
+        if msg is None:
+            msg = result.get('message')
+        if msg is None:
+            msg = result
+        return public.return_message(sts, 0, msg)
 
     #同步安装
     def install_sync(self,pluginInfo,get):
-        if public.is_offline_mode():
-            try:
-                import offline_plugin_mirror as mirror
-                if mirror.has_mirror(pluginInfo.get('name')):
-                    return mirror.install_from_mirror(pluginInfo.get('name'))
-            except:
-                pass
-            if public.is_offline_uninstallable_plugin(pluginInfo):
-                return public.return_msg_gettext(
-                    False,
-                    public.lang("Offline mode: import compatible plugins via ZIP in App Store"))
-            if pluginInfo.get('versions') and isinstance(pluginInfo['versions'], list) and pluginInfo['versions'] and 'download' in pluginInfo['versions'][0]:
-                return public.return_msg_gettext(False, public.lang("Offline mode: import plugins via ZIP in App Store"))
         import panelAuth
         try:
             token = panelAuth.panelAuth().create_serverid(None)['token']
@@ -796,14 +795,6 @@ class panelPlugin:
             session['init_cloud'] = True
 
         softList = public.load_soft_list(True if force == 1 else False)
-
-        if public.is_offline_mode() and isinstance(softList, dict) and not softList.get('list'):
-            try:
-                import offline_plugin_mirror as mirror
-                mirror.fetch_cloud_soft_list(force_update=True)
-                softList = public.load_soft_list(force=True)
-            except:
-                pass
 
         if get and 'init' in get:
             if softList:
@@ -1143,6 +1134,10 @@ class panelPlugin:
     #检查权限
     def check_accept(self,get):
         if public.is_offline_mode():
+            find = self.get_soft_find(get)
+            if isinstance(find, dict) and find.get('status') == 0:
+                if public.is_offline_uninstallable_plugin(find['message']):
+                    return False
             return True
         args = public.dict_obj()
         args.type = '8'
@@ -1560,22 +1555,14 @@ class panelPlugin:
         if isinstance(items, dict) and isinstance(items.get('data'), list):
             items = items['data']
 
-        if (not items or not isinstance(items, list)) and public.is_offline_mode():
-            try:
-                import offline_plugin_mirror as mirror
-                cloud = mirror.fetch_cloud_soft_list(force_update=False)
-                items = cloud.get('list') if isinstance(cloud, dict) else []
-            except:
-                items = []
-
-        if not items or not isinstance(items, list):
+        if (not items or not isinstance(items, list)):
             try:
                 raw = public.load_soft_list(force=True)
                 items = raw.get('list') if isinstance(raw, dict) else []
             except:
                 items = []
 
-        if not isinstance(items, list):
+        if not items or not isinstance(items, list):
             items = []
 
         self.__plugin_s_list = self.set_coexist(items)
@@ -1598,8 +1585,7 @@ class panelPlugin:
     def _soft_find_from_raw_catalog(self, sName):
         items = []
         try:
-            import offline_plugin_mirror as mirror
-            raw = mirror.fetch_cloud_soft_list(force_update=False)
+            raw = public.load_soft_list(force=False)
             items = raw.get('list') if isinstance(raw, dict) else []
         except:
             pass
@@ -2810,9 +2796,6 @@ class panelPlugin:
 
     #从云端获取插件列表
     def getCloudPlugin(self,get):
-        if public.is_offline_mode():
-            session['getCloudPlugin'] = True
-            return public.return_message(0, 0, public.lang("Using local plugin list (offline mode)"))
         if session.get('getCloudPlugin') and get != None: return public.return_message(0, 0,'Your plugin list is already the latest version {}!',("-1",))
         import json
         if not session.get('download_url'): session['download_url'] = 'http://node.aapanel.com'
@@ -3092,11 +3075,19 @@ class panelPlugin:
         self.set_pyenv(plugin_path + '/install.sh')
         public.ExecShell('cd ' + plugin_path + ' && bash install.sh install &> /tmp/panelShell.pl')
         p_info = public.ReadFile(plugin_path + '/info.json')
+        install_ok = False
+        if p_info:
+            try:
+                info = json.loads(p_info)
+                checks = info.get('install_checks') or plugin_path
+                install_ok = os.path.exists(checks)
+            except:
+                install_ok = os.path.isdir(plugin_path) and os.path.exists(plugin_path + '/install.sh')
         if os.path.isdir(tmp_path) and tmp_path.startswith('/www/server/panel/temp'):
             public.ExecShell("rm -rf " + tmp_path)
         else:
             public.ExecShell("rm -rf /www/server/panel/temp/*")
-        if p_info:
+        if install_ok and p_info:
             #----- 增加图标复制 hwliang<2021-03-23> -----#
             icon_sfile = plugin_path + '/icon.png'
             icon_dfile = '/www/server/panel/BTPanel/static/img/soft_ico/ico-{}.png'.format(get.plugin_name)
