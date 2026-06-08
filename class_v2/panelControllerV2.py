@@ -114,6 +114,8 @@ class Controller:
         hook_result = public.exec_hook(hook_index,hook_data)
         if isinstance(hook_result,dict):
             result = hook_result['result']
+        if public.is_offline_mode() and def_name in ('get_public_config_simple', 'get_public_config'):
+            result = public.apply_offline_public_config(result)
         return result
 
 

@@ -146,17 +146,6 @@
         ]
       },
       {
-        "title": "WAF",
-        "name": "btwaf",
-        "status": false,
-        "type": "plugin",
-        "source": {
-          "click": "href",
-          "href": "/waf/overview"
-        },
-        "params": []
-      },
-      {
         "title": "Tamper Core",
         "name": "tamper_core",
         "status": false,

@@ -2695,7 +2695,7 @@ class config:
                 'class': d['class'],
                 'show': not d['id'] in hide_menu,
                 'sort': d['sort'],
-            } for d in menu_init_data
+            } for d in menu_init_data if d['id'] not in public.get_removed_menu_ids()
         ]
         result = self.__make_sure_enable_menu(result)
         uid = session.get('uid', 0)

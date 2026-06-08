@@ -4311,7 +4311,7 @@ def get_menus():
         del (hide_menu)
         del (show_menu)
     menus = sorted(data, key=lambda x: x['sort'])
-    return menus
+    return filter_removed_menus(menus)
 
 
 def get_menus_for_session_router() -> list:
@@ -4332,7 +4332,7 @@ def get_menus_for_session_router() -> list:
                 'sort': x.get('sort'),
             } for x in menu_list.get('message', []) if x.get('show', False) is True
         ]
-        return result
+        return filter_removed_menus(result)
     else:
         return get_menus()
 
@@ -9263,10 +9263,75 @@ def load_soft_list(force: bool = True, retry_count: int = 0):
             return load_soft_list(force, retry_count + 1)
         raise PanelError(str(plugin_list_data['msg']))
 
+    return apply_offline_soft_list(plugin_list_data)
+
+
+def apply_offline_soft_list(plugin_list_data):
+    """Mark local/offline panel as lifetime Pro for plugin list APIs."""
+    if not is_offline_mode() or not isinstance(plugin_list_data, dict):
+        return plugin_list_data
+    plugin_list_data['pro'] = 0
+    plugin_list_data['ltd'] = 0
+    for key in ('list', 'data', 'msg'):
+        items = plugin_list_data.get(key)
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if isinstance(item, dict) and item.get('endtime', -1) < 0:
+                item['endtime'] = 0
     return plugin_list_data
 
 
-# 本地离线模式（无 cloud / 无 Pro 弹窗）
+REMOVED_MENU_IDS = frozenset([
+    'memuAwptoolkit',
+    'memu_btwaf',
+    'memuDomains',
+])
+
+REMOVED_PANEL_PATH_PREFIXES = (
+    '/wp',
+    '/waf',
+    '/btwaf',
+    '/ssl_domain',
+)
+
+REMOVED_PANEL_API_PREFIXES = (
+    '/v2/ssl_domain',
+    '/v2/business_ssl',
+    '/v2/wp/',
+)
+
+REMOVED_PANEL_EXACT_PATHS = frozenset([
+    '/btwaf_error',
+    '/v2/btwaf_error',
+])
+
+
+def get_removed_menu_ids():
+    return REMOVED_MENU_IDS
+
+
+def filter_removed_menus(menu_list):
+    if not menu_list:
+        return menu_list
+    return [m for m in menu_list if m.get('id') not in REMOVED_MENU_IDS]
+
+
+def is_removed_panel_path(path):
+    if not path:
+        return False
+    path = path.split('?')[0].rstrip('/') or '/'
+    if path in REMOVED_PANEL_EXACT_PATHS:
+        return True
+    for prefix in REMOVED_PANEL_PATH_PREFIXES:
+        if path == prefix or path.startswith(prefix + '/'):
+            return True
+    for prefix in REMOVED_PANEL_API_PREFIXES:
+        if path == prefix or path.startswith(prefix):
+            return True
+    return False
+
+
 def is_offline_mode():
     try:
         config_file = '{}/config/config.json'.format(get_panel_path())
@@ -9276,6 +9341,44 @@ def is_offline_mode():
         return bool(config_data.get('offline_mode', False))
     except:
         return False
+
+
+def apply_offline_public_config(result):
+    """
+    Patch Vue UI config API responses for offline/private mode.
+    Hides forced account bind and marks panel as lifetime Pro locally.
+    """
+    if not is_offline_mode() or not isinstance(result, dict):
+        return result
+
+    payload = result.get('message') if isinstance(result.get('message'), dict) else result
+    if not isinstance(payload, dict):
+        return result
+
+    pd = get_pd()
+    payload['get_pd'] = list(pd) if isinstance(pd, tuple) else pd
+    payload['isPro'] = False
+    payload['pro'] = 0
+    payload['ltd'] = 0
+    payload['account_limit'] = False
+    payload['install_finished'] = True
+
+    user_info = payload.get('user_info')
+    if not isinstance(user_info, dict):
+        user_info = {}
+        payload['user_info'] = user_info
+    user_info['status'] = True
+    data = user_info.get('data')
+    if not isinstance(data, dict):
+        data = {}
+        user_info['data'] = data
+    if not data.get('username'):
+        data['username'] = 'local@offline'
+
+    if isinstance(result.get('message'), dict):
+        result['message'] = payload
+        result['status'] = 0
+    return result
 
 
 # 官网API根地址

@@ -520,7 +520,9 @@ var soft = {
                                     thtml = '<button type="button" class="btn btn-success btn-xs" onclick="bt.soft.set_lib_config(\''+ item.name +'\',\''+ item.title +'\')">Setting</button>';
                                 }else if(item.endtime == -1){  //未购买
 
-                                  thtml = '<button type="button" class="btn btn-success btn-xs" onclick=\'bt.soft.product_pay_view('+ JSON.stringify({name:item.title,pid:item.pid,type:item.type,pulgin:true,renew:item.endtime}) +');\'>Upgrade now</button>';
+                                  thtml = window.__PANEL_OFFLINE_MODE
+                                    ? '<button type="button" class="btn btn-success btn-xs" onclick="bt.soft.set_lib_config(\''+ item.name +'\',\''+ item.title +'\')">Setting</button>'
+                                    : '<button type="button" class="btn btn-success btn-xs" onclick=\'bt.soft.product_pay_view('+ JSON.stringify({name:item.title,pid:item.pid,type:item.type,pulgin:true,renew:item.endtime}) +');\'>Upgrade now</button>';
                                 }else if(item.endtime == -2){ //已过期
                                   thtml = '<button type="button" class="btn btn-success btn-xs" onclick=\'bt.soft.product_pay_view('+ JSON.stringify({name:item.title,pid:item.pid,type:item.type,pulgin:true,renew:item.endtime}) +');\'>立即续费</button>';
                                 }
@@ -554,6 +556,10 @@ var soft = {
         btn_ground = tips_info.find('.btn-ground'),
         _this = this,
         el = '#updata_pro_info';
+        if (window.__PANEL_OFFLINE_MODE) {
+            $(el).empty();
+            return;
+        }
         $(el).empty()
         type = parseInt(type);
         if(type != 11) $(el).next('.onekey-menu-sub').remove();

@@ -55,6 +55,11 @@ app = Flask(
     template_folder="templates/{}".format(public.GetConfigValue('template'))
 )
 
+
+@app.context_processor
+def inject_offline_mode():
+    return {'offline_mode': public.is_offline_mode()}
+
 # 匹配你的 URL 格式：/apsess_xxx/...
 APSESS_PATH_RE = re.compile(r"^/((?:apsess_)+[A-Za-z0-9]{16,32})(/.*|$)")
 INVALID_REQUEST_TOKEN_HEAD = '__APSESS_INVALID__'
@@ -398,6 +403,8 @@ def request_check():
             if not public.user_router_authority():
                 return abort(403)
     if request.method not in ['GET', 'POST', 'HEAD']: return abort(404)
+    if public.is_removed_panel_path(request.path):
+        return abort(404)
     g.request_time = time.time()
     g.return_message = False
 
@@ -794,6 +801,8 @@ def index_new(sub_path: str = ''):
     # 面板首页
     comReturn = comm.local()
     if comReturn: return comReturn
+    if public.is_removed_panel_path('/' + sub_path):
+        return abort(404)
     data = {}
 
     if sub_path == '':
@@ -930,6 +939,7 @@ def index_new(sub_path: str = ''):
     import base64
     data['translations'] = base64.b64encode(json.dumps(load_translations()).encode()).decode()
     data['public_key'] = public.get_rsa_public_key().replace("\n", "")
+    data['offline_mode'] = public.is_offline_mode()
     return render_template('index_new.html', data=data)
 
 
@@ -2650,8 +2660,10 @@ def panel_public():
 @app.route('/<name>/<fun>/<path:stype>', methods=method_all)
 def panel_other(name=None, fun=None, stype=None):
     # 左侧栏路由
-    if name in ('site', 'database', 'docker', 'wp', 'mail', 'security', 'crontab', 'waf', 'setting', 'logs',
-                'monitor/system', 'control', 'binds', 'softs', 'modify_password', 'flow', 'ssl_domain', 'node'):
+    if name in ('wp', 'waf', 'ssl_domain', 'btwaf'):
+        return abort(404)
+    if name in ('site', 'database', 'docker', 'mail', 'security', 'crontab', 'setting', 'logs',
+                'monitor/system', 'control', 'binds', 'softs', 'modify_password', 'flow', 'node'):
         return index_new('{}/{}'.format(name, fun))
 
     # 插件接口
@@ -5150,6 +5162,7 @@ def overview_v2(pdata=None):
 
 @app.route(route_v2 + "/business_ssl", methods=method_all)
 def business_ssl(pdata=None):
+    return abort(404)
     # 商业SSL证书申请接口
     comReturn = comm.local()
     if comReturn: return comReturn
@@ -5192,6 +5205,7 @@ def business_ssl(pdata=None):
 
 @app.route(route_v2 + '/ssl_domain', methods=method_all)
 def domain_v2(pdata=None):
+    return abort(404)
     # 域名管理
     comReturn = comm.local()
     if comReturn: return comReturn
@@ -6981,6 +6995,7 @@ def install_finish():
 @app.route('/v2/wp/login/<int:site_id>', methods=method_get)
 @app.route('/v2/wp/login/<int:site_id>/<wp_site_type>', methods=method_get)
 def wp_login(site_id: int, wp_site_type: str = 'local'):
+    return abort(404)
     comReturn = comm.local()
     if comReturn: return comReturn
 

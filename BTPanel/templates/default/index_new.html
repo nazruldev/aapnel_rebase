@@ -14,6 +14,7 @@
 		<meta name="naive-ui-style" />
 		<title>{{session['title']}}</title>
 		<script>
+			window.__PANEL_OFFLINE_MODE = {{ 'true' if data.get('offline_mode') else 'false' }};
 			window.sites_path = "{{session['config']['sites_path']}}"
 			window.webserver = "{{session['webserver']}}"
 			window.distribution = "{{session['config']['distribution']}}"
@@ -31,6 +32,10 @@
 				statusCode: "{{data['status_code']}}",
 			}
 		</script>
+		{% if data.get('offline_mode') %}
+		<link rel="stylesheet" href="/static/css/offline_commercial.css?v={{session['version']}}" />
+		<script src="/static/js/offline_patch_vite.js?v={{session['version']}}"></script>
+		{% endif %}
 		<script type="module" crossorigin src="/static/vite/js/index-DV9DrNIN.js?v=1778752098997"></script>
 		<link rel="modulepreload" crossorigin href="/static/vite/js/prismjs-CP0O0FCs.js?v=1778752098997">
 		<link rel="modulepreload" crossorigin href="/static/vite/js/vue-core-27PG2C1f.js?v=1778752098997">
@@ -50,7 +55,7 @@
 		<a style="display: none" id="recycle_bin" data="{{data['recycle_bin']}}"></a>
 
 		<div id="app"></div>
-
+
 		<script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
 		<script nomodule crossorigin id="vite-legacy-polyfill" src="/static/vite/js/polyfills-legacy-Bmu_TDic.js?v=1778752098997"></script>
 		<script nomodule crossorigin id="vite-legacy-entry" data-src="/static/vite/js/index-legacy-6o9d0Mmi.js?v=1778752098997">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>

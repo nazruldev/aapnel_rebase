@@ -1,0 +1,22 @@
+/* Hide aaPanel commercial / upgrade UI in offline mode */
+body.panel-offline-mode .pro-badge,
+body.panel-offline-mode #updata_pro_info,
+body.panel-offline-mode .product-buy,
+body.panel-offline-mode .daily-product-buy,
+body.panel-offline-mode .authState,
+body.panel-offline-mode .bind-user,
+body.panel-offline-mode .openLtd,
+body.panel-offline-mode #is_ltd,
+body.panel-offline-mode .btpro-free,
+body.panel-offline-mode .btpro-gray,
+body.panel-offline-mode .btpro,
+body.panel-offline-mode .btltd-gray,
+body.panel-offline-mode .btltd,
+body.panel-offline-mode .updata_pro,
+body.panel-offline-mode .showprofun,
+body.panel-offline-mode .alert-ltd-success,
+body.panel-offline-mode .thumbnail-title-button-new.daily-product-buy {
+	display: none !important;
+	visibility: hidden !important;
+	pointer-events: none !important;
+}

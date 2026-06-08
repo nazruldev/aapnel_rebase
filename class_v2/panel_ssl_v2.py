@@ -217,6 +217,11 @@ class panelSSL:
 
     def GetUserInfo(self, get):
         # public.print_log("获取用户信息222")
+        if public.is_offline_mode():
+            return public.return_message(0, 0, {
+                'msg': public.lang("Got successfully!"),
+                'data': {'username': 'local@offline'}
+            })
         return_status = -1
         result = {}
         try:
