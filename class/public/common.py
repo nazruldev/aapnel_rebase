@@ -9282,14 +9282,14 @@ def apply_offline_soft_list(plugin_list_data):
 
 
 def filter_offline_soft_items(items):
-    """Hide paid plugins; show free plugins from aaPanel cloud list."""
+    """Hide paid plugins only; keep free catalog from aaPanel cloud."""
     if not is_offline_mode() or not isinstance(items, list):
         return items
     filtered = []
     for item in items:
         if not isinstance(item, dict):
             continue
-        if is_offline_uninstallable_plugin(item):
+        if is_offline_paid_plugin(item):
             continue
         try:
             if int(item.get('endtime', 0)) < 0:
@@ -9304,17 +9304,10 @@ def filter_offline_soft_items(items):
     return filtered
 
 
-def is_offline_uninstallable_plugin(item):
-    """True for paid/commercial plugins only (blocked in offline fork)."""
+def is_offline_paid_plugin(item):
+    """True only for commercial/paid plugins (hidden + install blocked)."""
     if not isinstance(item, dict):
         return False
-    if item.get('setup'):
-        return False
-    try:
-        if int(item.get('endtime', 0)) < 0:
-            return True
-    except:
-        pass
     try:
         price = item.get('price', 0)
         if price not in (None, '', 0, '0') and float(price) > 0:
@@ -9327,7 +9320,27 @@ def is_offline_uninstallable_plugin(item):
             return True
     except:
         pass
+    try:
+        ptype = int(item.get('type', 0))
+    except:
+        ptype = 0
+    if ptype == 12:
+        try:
+            return int(item.get('endtime', 0)) < 1
+        except:
+            return True
+    if ptype == 10:
+        try:
+            if float(item.get('price') or 0) > 0:
+                return True
+        except:
+            pass
     return False
+
+
+def is_offline_uninstallable_plugin(item):
+    """Alias used by install checks — paid plugins only."""
+    return is_offline_paid_plugin(item)
 
 
 def has_local_plugin_mirror(name):

@@ -554,7 +554,7 @@ class panelPlugin:
             return public.return_message(-1, 0, msg if isinstance(msg, str) else public.lang('failed to get soft info'))
         pluginInfo = pluginFind['message']
         get.pluginInfo = pluginInfo
-        if public.is_offline_mode() and public.is_offline_uninstallable_plugin(pluginInfo):
+        if public.is_offline_mode() and public.is_offline_paid_plugin(pluginInfo):
             return public.return_message(-1, 0, public.lang("Paid plugins are not available. Only free plugins can be installed from aaPanel."))
         check_result = self.check_install_limit(get)
         if check_result and get.get('Skip', False) not in [True,'true']:  # 判断是否跳过排斥检查。仅用于多服务相关插件
@@ -1136,7 +1136,7 @@ class panelPlugin:
         if public.is_offline_mode():
             find = self.get_soft_find(get)
             if isinstance(find, dict) and find.get('status') == 0:
-                if public.is_offline_uninstallable_plugin(find['message']):
+                if public.is_offline_paid_plugin(find['message']):
                     return False
             return True
         args = public.dict_obj()
